@@ -4,9 +4,9 @@
 using namespace std;
 
 int main(int argc, char* argv[]) {
-	cout << "Hello world!" << endl;
+	cout << "End of the world!" << endl;
 
 	if(argc > 1) {
-		cout << "This program doesn't take any arguments!" << endl;
+		cout << "This program will never take any arguments!" << endl;
 	}
 }
