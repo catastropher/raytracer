@@ -32,6 +32,27 @@ struct Vec3 {
     Vec3 operator*(float f) const {
         return Vec3(x * f, y * f, z * f);
     }
+    
+    Vec3 cross(const Vec3& v) const {
+        const Vec3& u = *this;
+        
+        return Vec3(
+            u.y * v.z - u.z * v.y,
+            u.z * v.x - u.x * v.z,
+            u.x * v.y - u.y * v.x
+        );
+    }
+    
+    float dot(const Vec3& v) const {
+        return x * v.x + y * v.y + z * v.z;
+    }
+    
+    string toString() const {
+        char str[128];
+        sprintf(str, "{ %f, %f, %f }", x, y, z);
+        
+        return string(str);
+    }
 };
 
 const float PI = 3.1415926535897;
@@ -43,14 +64,97 @@ float degToRadians(float deg) {
 
 struct Ray {
     Vec3 v[2];
+    Vec3 dir;
     
     Ray(Vec3 v0, Vec3 v1) {
         v[0] = v0;
         v[1] = v1;
+        
+        dir = (v[1] - v[0]).normalize();
     }
     
     Vec3 calculatePointOnLine(float t) const {
         return v[0] + (v[1] - v[0]) * t;
+    }
+};
+
+struct Plane {
+    Vec3 normal;
+    float d;
+    
+    bool calculateRayIntersection(const Ray& ray, Vec3& intersectDest) const {
+        float den = ray.dir.dot(normal);
+        
+        if(den == 0)
+            return false;
+        
+        float t = -(ray.v[0].dot(normal) + d) / den;
+        intersectDest = ray.v[0] + ray.dir * t;
+        
+        return true;
+    }
+    
+    Plane(const Vec3& p, const Vec3& u, const Vec3& v) {
+        normal = u.cross(v).normalize();
+        d = -p.dot(normal);
+        
+        cout << "Normal: " << normal.toString() << ", " << d << endl;
+    }
+    
+    Plane() { }
+};
+
+
+void line(Vec3 v0, Vec3 v1) {
+    drawLine(v0.x + 320, v0.y + 240, v1.x + 320, v1.y + 240, RGB_Blue);
+}
+
+struct Triangle {
+    Vec3 p[3];
+    Plane plane;
+    
+    Triangle(Vec3 p0, Vec3 p1, Vec3 p2) {
+        p[0] = p0;
+        p[1] = p1;
+        p[2] = p2;
+        
+        
+        line(p[0], p[1]);
+        line(p[1], p[2]);
+        line(p[0], p[2]);
+        
+        Vec3 u = (p[1] - p[0]).normalize();
+        Vec3 v = (p[2] - p[0]).normalize();
+        plane = Plane(p[0], u, v);
+    }
+    
+    bool calculateRayIntersection(const Ray& ray, Vec3& intersectDest) const {
+        Vec3 u = (p[1] - p[0]);
+        Vec3 v = (p[2] - p[0]);
+        
+        if(!plane.calculateRayIntersection(ray, intersectDest))
+            return false;
+        
+        //cout << intersectDest.toString() << endl;
+        
+        Vec3 w = (intersectDest - p[0]);
+        
+        float uv = u.dot(v);
+        float uu = u.dot(u);
+        
+        float vv = v.dot(v);
+        
+        float wv = w.dot(v);
+        float wu = w.dot(u);
+        
+        float d = uv * uv - uu * vv;
+        float s1 = (uv * wv - vv * wu) / d;
+        float t1 = (uv * wu - uu * wv) / d;
+        
+        if(s1 < 0 || s1 > 1.0 || t1 < 0 || (s1 + t1) > 1.0)
+            return false;
+        
+        return true;
     }
 };
 
@@ -135,12 +239,39 @@ struct Renderer {
         sphere.radius = 500;
         sphere.center = Vec3(0, 0, 2000);
         
+        float w = 200, h = 1000;
+        float y = 200;
+        float d = 500;
+        
+        Vec3 v[4] = {
+            Vec3(-w, y, d),
+            Vec3(-w, y, d + h),
+            Vec3(w, y, d + h),
+            Vec3(w, y, d)
+        };
+        
+        
+        Triangle tri(
+            v[0],
+            v[1],
+            v[2]
+        );
+        
+        Triangle tri2(
+            v[2], v[3], v[0]
+        );
+        
         for(int i = 0; i < screenH; ++i) {
             for(int j = 0; j < screenW; ++j) {
                 Ray ray = calculateRayForPixelOnScreen(j, i);
                 Vec3 intersections[2];
                 
-                int total = sphere.calculateRayIntersections(ray, intersections);
+                if(i == 240 - 50 && j == 320)
+                    cout << ray.dir.toString() << endl;
+                
+                int total = tri.calculateRayIntersection(ray, intersections[0]) +  //sphere.calculateRayIntersections(ray, intersections);
+                    tri2.calculateRayIntersection(ray, intersections[1]);
+                
                 
                 if(total > 0) {
                     Vec3 closest;
@@ -155,7 +286,7 @@ struct Renderer {
                     float minDist = 10;
                     float maxDist = 1000;
                     
-                    float intensity = 1.0 - (closest.z - (sphere.center.z - sphere.radius)) / sphere.radius; //((maxDist - minDist) - (closest.z - minDist)) / (maxDist - minDist);
+                    float intensity = 1.0;//1.0 - (closest.z - (sphere.center.z - sphere.radius)) / sphere.radius; //((maxDist - minDist) - (closest.z - minDist)) / (maxDist - minDist);
                     
                     ColorRGB color(255 * intensity, 0, 0);
                     
