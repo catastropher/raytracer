@@ -55,6 +55,8 @@ struct Vec3 {
     }
 };
 
+using Color = Vec3;
+
 const float PI = 3.1415926535897;
 
 float degToRadians(float deg) {
@@ -72,12 +74,23 @@ struct Ray {
         dir = (v[1] - v[0]).normalize();
     }
     
+    Ray() { }
+    
     Vec3 calculatePointOnLine(float t) const {
         return v[0] + (v[1] - v[0]) * t;
+    }
+    
+    Ray reflectAboutNormal(Vec3& normal, Vec3& intersectionPoint) {
+        float ndot = -normal.dot(dir);
+        Vec3 newDir = (dir + (normal * 2 * ndot)).normalize();
+        
+        return Ray(intersectionPoint, intersectionPoint + newDir);
     }
 };
 
 struct Shape {
+    Color color;
+    
     virtual int calculateRayIntersections(const Ray& ray, Vec3* intersectDest) const = 0;
     virtual Vec3 calculateNormalAtPoint(Vec3& point) const = 0;
     
@@ -95,6 +108,10 @@ struct Plane {
             return false;
         
         float t = -(ray.v[0].dot(normal) + d) / den;
+        
+        if(t < 0)
+            return false;
+        
         intersectDest = ray.v[0] + ray.dir * t;
         
         return true;
@@ -164,7 +181,7 @@ struct Triangle : Shape {
     }
     
     Vec3 calculateNormalAtPoint(Vec3& point) const {
-        
+        return Vec3(0, 0, 0) - plane.normal;
     }
 };
 
@@ -212,15 +229,13 @@ struct Sphere : Shape {
         
         for(int i = 0; i < totalIntersections; ++i) {
             intersectDest[i] = ray.calculatePointOnLine(d[i]);
-            
-            cout << intersectDest[i].z << endl;
         }
         
         return totalIntersections;
     }
     
     Vec3 calculateNormalAtPoint(Vec3& point) const {
-        
+        return (point - center).normalize();
     }
 };
 
@@ -228,6 +243,8 @@ struct Renderer {
     float screenW, screenH;
     float viewAngle;
     float distToScreen;
+    
+    vector<Shape* > shapesInScene;
     
     Renderer(float angle, float w, float h) {
         screen(640, 480);
@@ -247,65 +264,77 @@ struct Renderer {
         return Ray(cameraPos, pixelPos);
     }
     
+    Color traceRay(Ray& ray, int depth, Shape* lastReflection) {
+        Vec3 intersections[10];
+        float minZ = 10000000;
+        bool hitAtLeastOneObject = false;
+        Color rayColor = Vec3(0, 0, 0);
+        Shape* closestShape = NULL;
+        Vec3 closestShapeIntersection;
+        
+        for(Shape* shape : shapesInScene) {
+            if(shape == lastReflection)
+                continue;
+            
+            int totalIntersections = shape->calculateRayIntersections(ray, intersections);
+            
+            if(totalIntersections > 0) {
+                Vec3 closestIntersection = findClosestIntersection(intersections, totalIntersections);
+                
+                if(closestIntersection.z < minZ) {
+                    closestShape = shape;
+                    closestShapeIntersection = closestIntersection;
+                    
+                    hitAtLeastOneObject = true;
+                    
+                    
+                    float maxDepth = 2000;
+                    float intensity = max(min((1.0 - (closestIntersection.z / maxDepth)), 1.0), 0.0);
+                    
+                    rayColor = shape->color * intensity;
+                    
+                    minZ = closestIntersection.z;
+                }
+            }
+        }
+        
+        if(hitAtLeastOneObject && depth < 1) {
+            Vec3 normal = closestShape->calculateNormalAtPoint(closestShapeIntersection);
+            Ray reflectedRay = ray.reflectAboutNormal(normal, closestShapeIntersection);
+            
+            Color reflectedRayColor = traceRay(reflectedRay, depth + 1, closestShape);
+            
+            if(reflectedRayColor.x > 0 || reflectedRayColor.y > 0 || reflectedRayColor.z > 0) {
+                rayColor = reflectedRayColor;// * .9 + rayColor * .1;
+            }
+        }
+        
+        return rayColor;
+    }
+    
+    Vec3 findClosestIntersection(Vec3* intersections, int totalIntersections) {
+        int minIndex = 0;
+                
+        for(int i = 1; i < totalIntersections; ++i) {
+            if(intersections[i].z < intersections[minIndex].z)
+                minIndex = i;
+        }
+        
+        return intersections[minIndex];
+    }
+    
+    void addObjectToScene(Shape* shape) {
+        shapesInScene.push_back(shape);
+    }
+    
     void raytrace() {
-        Sphere sphere;
-        
-        sphere.radius = 500;
-        sphere.center = Vec3(0, 0, 2000);
-        
-        float w = 200, h = 1000;
-        float y = 200;
-        float d = 500;
-        
-        Vec3 v[4] = {
-            Vec3(-w, y, d),
-            Vec3(-w, y, d + h),
-            Vec3(w, y, d + h),
-            Vec3(w, y, d)
-        };
-        
-        
-        Triangle tri(
-            v[0],
-            v[1],
-            v[2]
-        );
-        
-        Triangle tri2(
-            v[2], v[3], v[0]
-        );
-        
         for(int i = 0; i < screenH; ++i) {
             for(int j = 0; j < screenW; ++j) {
                 Ray ray = calculateRayForPixelOnScreen(j, i);
-                Vec3 intersections[2];
                 
-                if(i == 240 - 50 && j == 320)
-                    cout << ray.dir.toString() << endl;
+                Color rayColor = traceRay(ray, 0, NULL) * 255;
                 
-                int total = tri.calculateRayIntersections(ray, &intersections[0]) +  //sphere.calculateRayIntersections(ray, intersections);
-                    tri2.calculateRayIntersections(ray, &intersections[1]);
-                
-                
-                if(total > 0) {
-                    Vec3 closest;
-                    
-                    if(total == 1) {
-                        closest = intersections[0];
-                    }
-                    else {
-                        closest = (intersections[0].z < intersections[1].z ? intersections[0] : intersections[1]);
-                    }
-                    
-                    float minDist = 10;
-                    float maxDist = 1000;
-                    
-                    float intensity = 1.0;//1.0 - (closest.z - (sphere.center.z - sphere.radius)) / sphere.radius; //((maxDist - minDist) - (closest.z - minDist)) / (maxDist - minDist);
-                    
-                    ColorRGB color(255 * intensity, 0, 0);
-                    
-                    pset(j, i, color);
-                }
+                pset(j, i, ColorRGB(rayColor.x, rayColor.y, rayColor.z));
             }
         }
     }
@@ -315,10 +344,48 @@ struct Renderer {
 
 
 
+Sphere* sp;
 
 
-
-
+void buildTestScene(Renderer& renderer) {
+    Sphere* sphere = new Sphere();
+        
+    sp = sphere;
+    
+    sphere->radius = 200;
+    sphere->center = Vec3(0, -200, 1000);
+    sphere->color = Vec3(1, 0, 0);
+    
+    float w = 200, h = 1000;
+    float y = 200;
+    float d = 500;
+    
+    Vec3 v[4] = {
+        Vec3(-w, y, d),
+        Vec3(-w, y, d + h),
+        Vec3(w, y, d + h),
+        Vec3(w, y, d)
+    };
+    
+    
+    Triangle* tri1 = new Triangle(
+        v[0],
+        v[1],
+        v[2]
+    );
+    
+    tri1->color = Color(0, 0, 1);
+    
+    Triangle* tri2 = new Triangle (
+        v[2], v[3], v[0]
+    );
+    
+    tri2->color = Color(0, 0, 1);
+    
+    renderer.addObjectToScene(sphere);
+    renderer.addObjectToScene(tri1);
+    renderer.addObjectToScene(tri2);
+}
 
 
 
@@ -329,9 +396,11 @@ int main(int argc, char* argv[]) {
     
     cls(RGB_Black);
     
-    renderer.raytrace();
+    buildTestScene(renderer);
     
     while(!done()) {
+        renderer.raytrace();
+        //++sp->center.z;
         redraw();
     }
 }
