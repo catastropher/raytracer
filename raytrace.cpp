@@ -43,6 +43,23 @@ struct Vec3 {
         );
     }
     
+    Vec3 neg() const {
+        return Vec3(-x, -y, -z);
+    }
+    
+    Vec3 multiplyEach(Vec3& v) const {
+        return Vec3(x * v.x, y * v.y, z * v.z);
+    }
+    
+    Vec3 maxValue(float maxValueAllowed) {
+        return Vec3(min(maxValueAllowed, x), min(maxValueAllowed, y), min(maxValueAllowed, z));
+    }
+    
+    Vec3 reflectAboutNormal(Vec3& normal) const {
+        float ndot = -normal.dot(*this);
+        return (*this + (normal * 2 * ndot)).normalize();
+    }
+    
     float dot(const Vec3& v) const {
         return x * v.x + y * v.y + z * v.z;
     }
@@ -63,6 +80,15 @@ float degToRadians(float deg) {
     return deg * PI / 180.0;
 }
 
+struct Material {
+    float diffuse;
+    float specular;
+    float alpha;
+    
+    Material(float d, float s, float a) : diffuse(d), specular(s), alpha(a) { }
+    Material() { }
+};
+
 struct Ray {
     Vec3 v[2];
     Vec3 dir;
@@ -81,15 +107,14 @@ struct Ray {
     }
     
     Ray reflectAboutNormal(Vec3& normal, Vec3& intersectionPoint) {
-        float ndot = -normal.dot(dir);
-        Vec3 newDir = (dir + (normal * 2 * ndot)).normalize();
-        
+        Vec3 newDir = dir.reflectAboutNormal(normal);
         return Ray(intersectionPoint, intersectionPoint + newDir);
     }
 };
 
 struct Shape {
     Color color;
+    Material material;
     
     virtual int calculateRayIntersections(const Ray& ray, Vec3* intersectDest) const = 0;
     virtual Vec3 calculateNormalAtPoint(Vec3& point) const = 0;
@@ -181,7 +206,7 @@ struct Triangle : Shape {
     }
     
     Vec3 calculateNormalAtPoint(Vec3& point) const {
-        return Vec3(0, 0, 0) - plane.normal;
+        return plane.normal;
     }
 };
 
@@ -239,12 +264,41 @@ struct Sphere : Shape {
     }
 };
 
+struct Light {
+    Color color;
+    Vec3 pos;
+    float intensity;
+    Vec3 dir;
+    
+    Color evaluatePhongReflectionModel(Material& mat, Color& objColor, Vec3& objNormal, Vec3& pointOnObj, Vec3& camPos) {
+        Vec3 L = (pos - pointOnObj).normalize();
+        Vec3 R = L.neg().reflectAboutNormal(objNormal);
+        Vec3 V = (camPos - pointOnObj).normalize();
+        Vec3& N = objNormal;
+        
+        float cosTheta = abs(L.dot(N));// * (L.dot(N));
+        Color diffuseColor = Vec3(0, 0, 0);
+        
+        if(cosTheta > 0)
+            diffuseColor = color.multiplyEach(objColor) * cosTheta * mat.diffuse;
+        
+        Color specularColor = color.multiplyEach(objColor) * pow(V.dot(R), mat.alpha) * mat.specular;
+        
+        return diffuseColor;// + specularColor;
+    }
+};
+
 struct Renderer {
     float screenW, screenH;
     float viewAngle;
     float distToScreen;
     
     vector<Shape* > shapesInScene;
+    
+    float ambientLightIntensity;
+    vector<Light> lightsInScene;
+    
+    Vec3 camPosition;
     
     Renderer(float angle, float w, float h) {
         screen(640, 480);
@@ -255,6 +309,12 @@ struct Renderer {
         distToScreen = (w / 2 ) / tan(degToRadians(angle / 2));
         
         cout << "Dist to screen: " << distToScreen << endl;
+        
+        camPosition = Vec3(0, 0, 0);
+    }
+    
+    void addLight(Light light) {
+        lightsInScene.push_back(light);
     }
     
     Ray calculateRayForPixelOnScreen(int x, int y) {
@@ -262,6 +322,16 @@ struct Renderer {
         Vec3 pixelPos(x - w / 2, y - h / 2, distToScreen);
         
         return Ray(cameraPos, pixelPos);
+    }
+    
+    Color calculateLighting(Shape* shape, Vec3& objNormal, Vec3& pointOnObj) {
+        Color result = shape->color * ambientLightIntensity;
+        
+        for(Light& light : lightsInScene) {
+            result = result + light.evaluatePhongReflectionModel(shape->material, shape->color, objNormal, pointOnObj, camPosition);
+        }
+        
+        return result.maxValue(1.0);
     }
     
     Color traceRay(Ray& ray, int depth, Shape* lastReflection) {
@@ -291,7 +361,8 @@ struct Renderer {
                     float maxDepth = 2000;
                     float intensity = max(min((1.0 - (closestIntersection.z / maxDepth)), 1.0), 0.0);
                     
-                    rayColor = shape->color * intensity;
+                    Vec3 normal = closestShape->calculateNormalAtPoint(closestShapeIntersection);
+                    rayColor = calculateLighting(closestShape, normal, closestShapeIntersection);
                     
                     minZ = closestIntersection.z;
                 }
@@ -348,6 +419,13 @@ Sphere* sp;
 
 
 void buildTestScene(Renderer& renderer) {
+    Material mat;
+    
+    mat.alpha = 1.0;
+    mat.diffuse = 1.0;
+    mat.specular = 0.0;
+    
+    
     Sphere* sphere = new Sphere();
         
     sp = sphere;
@@ -355,6 +433,7 @@ void buildTestScene(Renderer& renderer) {
     sphere->radius = 200;
     sphere->center = Vec3(0, -200, 1000);
     sphere->color = Vec3(1, 0, 0);
+    sphere->material = mat;
     
     float w = 200, h = 1000;
     float y = 200;
@@ -375,16 +454,26 @@ void buildTestScene(Renderer& renderer) {
     );
     
     tri1->color = Color(0, 0, 1);
+    tri1->material = mat;
     
     Triangle* tri2 = new Triangle (
         v[2], v[3], v[0]
     );
     
     tri2->color = Color(0, 0, 1);
+    tri2->material = mat;
     
     renderer.addObjectToScene(sphere);
     renderer.addObjectToScene(tri1);
     renderer.addObjectToScene(tri2);
+    
+    Light light;
+    light.color = Vec3(1, 1, 1);
+    light.dir = Vec3(0, 1, 0);
+    light.pos = Vec3(0, 0, -1000);
+    light.intensity = .5;
+    
+    renderer.addLight(light);
 }
 
 
@@ -394,13 +483,15 @@ void buildTestScene(Renderer& renderer) {
 int main(int argc, char* argv[]) {    
     Renderer renderer(60.0, 640, 480);
     
+    renderer.ambientLightIntensity = .1;
+    
     cls(RGB_Black);
     
     buildTestScene(renderer);
     
     while(!done()) {
         renderer.raytrace();
-        //++sp->center.z;
+        ++sp->center.z;
         redraw();
     }
 }
