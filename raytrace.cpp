@@ -61,7 +61,6 @@ float degToRadians(float deg) {
     return deg * PI / 180.0;
 }
 
-
 struct Ray {
     Vec3 v[2];
     Vec3 dir;
@@ -76,6 +75,13 @@ struct Ray {
     Vec3 calculatePointOnLine(float t) const {
         return v[0] + (v[1] - v[0]) * t;
     }
+};
+
+struct Shape {
+    virtual int calculateRayIntersections(const Ray& ray, Vec3* intersectDest) const = 0;
+    virtual Vec3 calculateNormalAtPoint(Vec3& point) const = 0;
+    
+    virtual ~Shape() { }
 };
 
 struct Plane {
@@ -109,7 +115,7 @@ void line(Vec3 v0, Vec3 v1) {
     drawLine(v0.x + 320, v0.y + 240, v1.x + 320, v1.y + 240, RGB_Blue);
 }
 
-struct Triangle {
+struct Triangle : Shape {
     Vec3 p[3];
     Plane plane;
     
@@ -128,16 +134,16 @@ struct Triangle {
         plane = Plane(p[0], u, v);
     }
     
-    bool calculateRayIntersection(const Ray& ray, Vec3& intersectDest) const {
+    int calculateRayIntersections(const Ray& ray, Vec3* intersectDest) const {
         Vec3 u = (p[1] - p[0]);
         Vec3 v = (p[2] - p[0]);
         
-        if(!plane.calculateRayIntersection(ray, intersectDest))
-            return false;
+        if(!plane.calculateRayIntersection(ray, *intersectDest))
+            return 0;
         
         //cout << intersectDest.toString() << endl;
         
-        Vec3 w = (intersectDest - p[0]);
+        Vec3 w = (*intersectDest - p[0]);
         
         float uv = u.dot(v);
         float uu = u.dot(u);
@@ -152,13 +158,17 @@ struct Triangle {
         float t1 = (uv * wu - uu * wv) / d;
         
         if(s1 < 0 || s1 > 1.0 || t1 < 0 || (s1 + t1) > 1.0)
-            return false;
+            return 0;
         
-        return true;
+        return 1;
+    }
+    
+    Vec3 calculateNormalAtPoint(Vec3& point) const {
+        
     }
 };
 
-struct Sphere {
+struct Sphere : Shape {
     float radius;
     Vec3 center;
     
@@ -207,6 +217,10 @@ struct Sphere {
         }
         
         return totalIntersections;
+    }
+    
+    Vec3 calculateNormalAtPoint(Vec3& point) const {
+        
     }
 };
 
@@ -269,8 +283,8 @@ struct Renderer {
                 if(i == 240 - 50 && j == 320)
                     cout << ray.dir.toString() << endl;
                 
-                int total = tri.calculateRayIntersection(ray, intersections[0]) +  //sphere.calculateRayIntersections(ray, intersections);
-                    tri2.calculateRayIntersection(ray, intersections[1]);
+                int total = tri.calculateRayIntersections(ray, &intersections[0]) +  //sphere.calculateRayIntersections(ray, intersections);
+                    tri2.calculateRayIntersections(ray, &intersections[1]);
                 
                 
                 if(total > 0) {
