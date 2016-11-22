@@ -1,5 +1,7 @@
 #include <iostream>
 #include <cmath>
+#include <assert.h>
+
 #include "quickcg.h"
 
 using namespace std;
@@ -154,7 +156,7 @@ struct Plane {
 
 
 void line(Vec3 v0, Vec3 v1) {
-    drawLine(v0.x + 320, v0.y + 240, v1.x + 320, v1.y + 240, RGB_Blue);
+    //drawLine(v0.x + 320, v0.y + 240, v1.x + 320, v1.y + 240, RGB_Blue);
 }
 
 struct Triangle : Shape {
@@ -398,6 +400,12 @@ struct Renderer {
         shapesInScene.push_back(shape);
     }
     
+    void addTriangle(vector<Triangle> triangles) {
+        for(Triangle t : triangles) {
+            addObjectToScene(new Triangle(t));
+        }
+    }
+    
     void raytrace() {
         for(int i = 0; i < screenH; ++i) {
             for(int j = 0; j < screenW; ++j) {
@@ -407,6 +415,10 @@ struct Renderer {
                 
                 pset(j, i, ColorRGB(rayColor.x, rayColor.y, rayColor.z));
             }
+           
+            redraw();
+            redraw();
+            cout << (i * 100 / screenH) << "%" << endl;
         }
     }
 };
@@ -417,6 +429,191 @@ struct Renderer {
 
 Sphere* sp;
 
+struct ModelLoader {
+    struct LineArgument {
+        vector<string> part;
+    };
+    
+    struct Line {
+        string type;
+        vector<LineArgument> arguments;
+    };
+    
+    vector<Vec3> vertices;
+    vector<Triangle> triangles;
+    
+    vector<Triangle> loadFile(string fileName) {
+        FILE* file = fopen(fileName.c_str(), "rb");
+        if(!file)
+            throw "Failed to load file: " + fileName;
+         
+        string fileContents;
+        int c;
+        while((c = fgetc(file)) != EOF) {
+            fileContents += (char)c;
+        }
+        
+        fileContents += '\0';
+        fclose(file);
+        
+        vector<Line> lines = parseFile(fileContents);
+        processLines(lines);
+        
+        return triangles;
+    }
+    
+    void processLines(vector<Line>& lines) {
+        for(Line& line : lines) {
+            processLine(line);
+        }
+    }
+    
+    void processLine(Line& line) {
+        if(line.type == "#" || line.type == "" || line.type == "s" || line.type == "g" || line.type == "usemtl" || line.type == "mtllib") return;
+        if(processVertex(line)) return;
+        if(processFace(line)) return;
+        if(processNormal(line)) return;
+        
+        throw "Unknown line type: " + line.type;
+    }
+    
+    bool processVertex(Line& line) {
+        if(line.type != "v")
+            return false;
+        
+        assert(line.arguments.size() == 3);
+        
+        Vec3 v(
+            atof(line.arguments[0].part[0].c_str()),
+            -atof(line.arguments[1].part[0].c_str()),
+            atof(line.arguments[2].part[0].c_str()) + 300
+        );
+        
+        vertices.push_back(v);
+        
+        return true;
+    }
+    
+    bool processFace(Line& line) {
+        if(line.type != "f")
+            return false;
+        
+        assert(line.arguments.size() == 3 || line.arguments.size() == 4);
+        
+        int v0 = atoi(line.arguments[0].part[0].c_str()) - 1;
+        int v1 = atoi(line.arguments[1].part[0].c_str()) - 1;
+        int v2 = atoi(line.arguments[2].part[0].c_str()) - 1;
+        int v3 = 0;
+        
+        if(line.arguments.size() == 4)
+            v3 = atoi(line.arguments[3].part[0].c_str()) - 1;
+        
+        Triangle triangle(vertices[v0], vertices[v1], vertices[v2]);
+        triangle.color = Vec3(1.0, 0, 0);
+        triangle.material = Material(1.0, 1.0, 1.0);
+        triangles.push_back(triangle);
+        
+        if(line.arguments.size() == 4) {
+            Triangle triangle(vertices[v2], vertices[v3], vertices[v0]);
+            triangle.color = Vec3(1.0, 0, 0);
+            triangle.material = Material(1.0, 1.0, 1.0);
+            triangles.push_back(triangle);
+        }
+        
+        return true;
+    }
+    
+    bool processNormal(Line& line) {
+        return line.type == "vn";
+    }
+    
+    char* findLineEnd(char* start) {
+        while(*start && *start != '\n')
+            ++start;
+        
+        return start;
+    }
+    
+    char* consumeWhitespace(char* start, char* end) {
+        while(start < end && (*start == ' ' || *start == '\t'))
+            ++start;
+        
+        return start;
+    }
+    
+    vector<Line> parseFile(string fileContents) {
+        char* start = &fileContents[0];
+        char* end;
+        char* fileEnd = &fileContents[fileContents.size() - 1];
+        vector<Line> lines;
+        
+        while(start < fileEnd) {
+            end = findLineEnd(start);
+            cout << "Line: " << string(start, end) << endl;
+            lines.push_back(parseLine(start, end));
+            start = end + 1;
+        }
+        
+        for(Line line : lines) {
+            cout << line.type << endl;
+            
+            for(LineArgument arg : line.arguments) {
+                cout << "\t";
+                
+                for(int i = 0; i < arg.part.size(); ++i) {
+                    cout << arg.part[i] << " ";
+                }
+                
+                cout << endl;
+            }
+        }
+        
+        return lines;
+    }
+    
+    Line parseLine(char* start, char* end) {
+        char* startSave = start;
+        
+        start = consumeWhitespace(start, end);
+        Line line;
+        
+        while(start < end && (*start == '#' || isalpha(*start))) {
+            line.type += *start;
+            ++start;
+        }
+        
+        if(line.type == "#")
+            return line;
+        
+        while(start < end) {
+            start = consumeWhitespace(start, end);
+            LineArgument lineArg;
+            
+            while(start < end) {
+                string arg;
+                
+                while(start < end && (*start == '.' || isdigit(*start) || *start == '-' || isalpha(*start))) {
+                    arg += *start;
+                    ++start;
+                }
+                
+                lineArg.part.push_back(arg);
+                
+                if(lineArg.part.size() > 10)
+                    throw "Too many arguments for line: " + string(startSave, end);
+                
+                if(*start != '/')
+                    break;
+                
+                ++start;
+            }
+            
+            line.arguments.push_back(lineArg);
+        }
+        
+        return line;
+    }
+};
 
 void buildTestScene(Renderer& renderer) {
     Material mat;
@@ -424,17 +621,17 @@ void buildTestScene(Renderer& renderer) {
     mat.alpha = 1.0;
     mat.diffuse = 1.0;
     mat.specular = 0.0;
-    
-    
-    Sphere* sphere = new Sphere();
-        
-    sp = sphere;
-    
-    sphere->radius = 200;
-    sphere->center = Vec3(0, -200, 1000);
-    sphere->color = Vec3(1, 0, 0);
-    sphere->material = mat;
-    
+//     
+//     
+//     Sphere* sphere = new Sphere();
+//         
+//     sp = sphere;
+//     
+//     sphere->radius = 200;
+//     sphere->center = Vec3(0, -200, 1000);
+//     sphere->color = Vec3(1, 0, 0);
+//     sphere->material = mat;
+//     
     float w = 200, h = 1000;
     float y = 200;
     float d = 500;
@@ -463,7 +660,7 @@ void buildTestScene(Renderer& renderer) {
     tri2->color = Color(0, 0, 1);
     tri2->material = mat;
     
-    renderer.addObjectToScene(sphere);
+    //renderer.addObjectToScene(sphere);
     renderer.addObjectToScene(tri1);
     renderer.addObjectToScene(tri2);
     
@@ -473,12 +670,20 @@ void buildTestScene(Renderer& renderer) {
     light.pos = Vec3(0, 0, -1000);
     light.intensity = .5;
     
+    
+    ModelLoader loader;
+    
+    try {
+        vector<Triangle> triangles = loader.loadFile("teapot.obj");
+        renderer.addTriangle(triangles);
+    }
+    catch(string s) {
+        cerr << "Error: " << s << endl;
+        exit(-1);
+    }
+    
     renderer.addLight(light);
 }
-
-
-
-
 
 int main(int argc, char* argv[]) {    
     Renderer renderer(60.0, 640, 480);
@@ -489,9 +694,10 @@ int main(int argc, char* argv[]) {
     
     buildTestScene(renderer);
     
+    renderer.raytrace();
+    
     while(!done()) {
-        renderer.raytrace();
-        ++sp->center.z;
+        //++sp->center.z;
         redraw();
     }
 }
