@@ -114,11 +114,16 @@ struct Ray {
     }
 };
 
+struct Intersection {
+    Vec3 pos;
+    Vec3 normal;
+};
+
 struct Shape {
     Color color;
     Material material;
     
-    virtual int calculateRayIntersections(const Ray& ray, Vec3* intersectDest) const = 0;
+    virtual int calculateRayIntersections(const Ray& ray, Intersection* dest) const = 0;
     virtual Vec3 calculateNormalAtPoint(Vec3& point) const = 0;
     
     virtual ~Shape() { }
@@ -162,6 +167,7 @@ void line(Vec3 v0, Vec3 v1) {
 struct Triangle : Shape {
     Vec3 p[3];
     Plane plane;
+    Vec3 normals[3];
     
     Triangle(Vec3 p0, Vec3 p1, Vec3 p2) {
         p[0] = p0;
@@ -176,18 +182,22 @@ struct Triangle : Shape {
         Vec3 u = (p[1] - p[0]).normalize();
         Vec3 v = (p[2] - p[0]).normalize();
         plane = Plane(p[0], u, v);
+        
+        normals[0] = plane.normal;
+        normals[1] = plane.normal;
+        normals[2] = plane.normal;
     }
     
-    int calculateRayIntersections(const Ray& ray, Vec3* intersectDest) const {
+    int calculateRayIntersections(const Ray& ray, Intersection* intersectDest) const {
         Vec3 u = (p[1] - p[0]);
         Vec3 v = (p[2] - p[0]);
         
-        if(!plane.calculateRayIntersection(ray, *intersectDest))
+        if(!plane.calculateRayIntersection(ray, intersectDest->pos))
             return 0;
         
         //cout << intersectDest.toString() << endl;
         
-        Vec3 w = (*intersectDest - p[0]);
+        Vec3 w = (intersectDest->pos - p[0]);
         
         float uv = u.dot(v);
         float uu = u.dot(u);
@@ -204,7 +214,19 @@ struct Triangle : Shape {
         if(s1 < 0 || s1 > 1.0 || t1 < 0 || (s1 + t1) > 1.0)
             return 0;
         
+        intersectDest->normal = calculateNormal(s1, t1); //calculateNormalAtPoint(intersectDest->pos);
+        
         return 1;
+    }
+    
+    void setNormals(Vec3 n0, Vec3 n1, Vec3 n2) {
+        normals[0] = n0;
+        normals[1] = n1;
+        normals[2] = n2;
+    }
+    
+    Vec3 calculateNormal(float u, float v) const {
+        return normals[0] * (1.0 - u - v) + normals[1] * u + normals[2] * v;
     }
     
     Vec3 calculateNormalAtPoint(Vec3& point) const {
@@ -217,7 +239,7 @@ struct Sphere : Shape {
     Vec3 center;
     
     // Returns the number of intersections found
-    int calculateRayIntersections(const Ray& ray, Vec3* intersectDest) const {
+    int calculateRayIntersections(const Ray& ray, Intersection* intersectDest) const {
         float xA = ray.v[0].x;
         float yA = ray.v[0].y;
         float zA = ray.v[0].z;
@@ -255,7 +277,8 @@ struct Sphere : Shape {
         }
         
         for(int i = 0; i < totalIntersections; ++i) {
-            intersectDest[i] = ray.calculatePointOnLine(d[i]);
+            intersectDest[i].pos = ray.calculatePointOnLine(d[i]);
+            intersectDest[i].normal = calculateNormalAtPoint(intersectDest[i].pos);
         }
         
         return totalIntersections;
@@ -278,15 +301,19 @@ struct Light {
         Vec3 V = (camPos - pointOnObj).normalize();
         Vec3& N = objNormal;
         
-        float cosTheta = abs(L.dot(N));// * (L.dot(N));
+        float cosTheta = max(0.0f, L.dot(N));// * (L.dot(N));
         Color diffuseColor = Vec3(0, 0, 0);
         
         if(cosTheta > 0)
             diffuseColor = color.multiplyEach(objColor) * cosTheta * mat.diffuse;
         
-        Color specularColor = color.multiplyEach(objColor) * pow(V.dot(R), mat.alpha) * mat.specular;
+        Color specularColor = Color(1.0, 1.0, 1.0) * pow(max(0.0f, V.dot(R)), mat.alpha) * mat.specular;
         
-        return diffuseColor;// + specularColor;
+        return diffuseColor + specularColor;
+    }
+    
+    void lookAt(Vec3 posToLookAt) {
+        dir = (posToLookAt - pos).normalize();
     }
 };
 
@@ -337,12 +364,12 @@ struct Renderer {
     }
     
     Color traceRay(Ray& ray, int depth, Shape* lastReflection) {
-        Vec3 intersections[10];
+        Intersection intersections[10];
         float minZ = 10000000;
         bool hitAtLeastOneObject = false;
         Color rayColor = Vec3(0, 0, 0);
         Shape* closestShape = NULL;
-        Vec3 closestShapeIntersection;
+        Intersection closestShapeIntersection;
         
         for(Shape* shape : shapesInScene) {
             if(shape == lastReflection)
@@ -351,9 +378,9 @@ struct Renderer {
             int totalIntersections = shape->calculateRayIntersections(ray, intersections);
             
             if(totalIntersections > 0) {
-                Vec3 closestIntersection = findClosestIntersection(intersections, totalIntersections);
+                Intersection closestIntersection = findClosestIntersection(intersections, totalIntersections);
                 
-                if(closestIntersection.z < minZ) {
+                if(closestIntersection.pos.z < minZ) {
                     closestShape = shape;
                     closestShapeIntersection = closestIntersection;
                     
@@ -361,19 +388,16 @@ struct Renderer {
                     
                     
                     float maxDepth = 2000;
-                    float intensity = max(min((1.0 - (closestIntersection.z / maxDepth)), 1.0), 0.0);
                     
-                    Vec3 normal = closestShape->calculateNormalAtPoint(closestShapeIntersection);
-                    rayColor = calculateLighting(closestShape, normal, closestShapeIntersection);
+                    rayColor = calculateLighting(closestShape, closestShapeIntersection.normal, closestShapeIntersection.pos);
                     
-                    minZ = closestIntersection.z;
+                    minZ = closestIntersection.pos.z;
                 }
             }
         }
         
-        if(hitAtLeastOneObject && depth < 1) {
-            Vec3 normal = closestShape->calculateNormalAtPoint(closestShapeIntersection);
-            Ray reflectedRay = ray.reflectAboutNormal(normal, closestShapeIntersection);
+        if(hitAtLeastOneObject && depth < 0) {
+            Ray reflectedRay = ray.reflectAboutNormal(closestShapeIntersection.normal, closestShapeIntersection.pos);
             
             Color reflectedRayColor = traceRay(reflectedRay, depth + 1, closestShape);
             
@@ -385,11 +409,11 @@ struct Renderer {
         return rayColor;
     }
     
-    Vec3 findClosestIntersection(Vec3* intersections, int totalIntersections) {
+    Intersection findClosestIntersection(Intersection* intersections, int totalIntersections) {
         int minIndex = 0;
                 
         for(int i = 1; i < totalIntersections; ++i) {
-            if(intersections[i].z < intersections[minIndex].z)
+            if(intersections[i].pos.z < intersections[minIndex].pos.z)
                 minIndex = i;
         }
         
@@ -407,8 +431,8 @@ struct Renderer {
     }
     
     void raytrace() {
-        for(int i = 0; i < screenH; ++i) {
-            for(int j = 0; j < screenW; ++j) {
+        for(int i = 30; i < screenH; ++i) {
+            for(int j = screenW / 2; j < 2 * screenW / 3; ++j) {
                 Ray ray = calculateRayForPixelOnScreen(j, i);
                 
                 Color rayColor = traceRay(ray, 0, NULL) * 255;
@@ -441,6 +465,7 @@ struct ModelLoader {
     
     vector<Vec3> vertices;
     vector<Triangle> triangles;
+    vector<Vec3> normals;
     
     vector<Triangle> loadFile(string fileName) {
         FILE* file = fopen(fileName.c_str(), "rb");
@@ -469,7 +494,7 @@ struct ModelLoader {
     }
     
     void processLine(Line& line) {
-        if(line.type == "#" || line.type == "" || line.type == "s" || line.type == "g" || line.type == "usemtl" || line.type == "mtllib") return;
+        if(line.type == "#" || line.type == "" || line.type == "s" || line.type == "g" || line.type == "usemtl" || line.type == "mtllib" || line.type == "vt") return;
         if(processVertex(line)) return;
         if(processFace(line)) return;
         if(processNormal(line)) return;
@@ -494,6 +519,19 @@ struct ModelLoader {
         return true;
     }
     
+    void addTriangle(int v0, int v1, int v2) {
+        Material mat = Material(1.0, 0, 0);
+        
+        Triangle triangle(vertices[v0], vertices[v1], vertices[v2]);
+        triangle.color = Vec3(1.0, 0, 0);
+        triangle.material = mat;
+        
+        if(normals.size() >= vertices.size())
+            triangle.setNormals(normals[v0], normals[v1], normals[v2]);
+        
+        triangles.push_back(triangle);
+    }
+    
     bool processFace(Line& line) {
         if(line.type != "f")
             return false;
@@ -508,23 +546,30 @@ struct ModelLoader {
         if(line.arguments.size() == 4)
             v3 = atoi(line.arguments[3].part[0].c_str()) - 1;
         
-        Triangle triangle(vertices[v0], vertices[v1], vertices[v2]);
-        triangle.color = Vec3(1.0, 0, 0);
-        triangle.material = Material(1.0, 1.0, 1.0);
-        triangles.push_back(triangle);
+        addTriangle(v0, v1, v2);
         
         if(line.arguments.size() == 4) {
-            Triangle triangle(vertices[v2], vertices[v3], vertices[v0]);
-            triangle.color = Vec3(1.0, 0, 0);
-            triangle.material = Material(1.0, 1.0, 1.0);
-            triangles.push_back(triangle);
+            addTriangle(v2, v3, v0);
         }
         
         return true;
     }
     
     bool processNormal(Line& line) {
-        return line.type == "vn";
+        if(line.type != "vn")
+            return false;
+        
+        assert(line.arguments.size() == 3);
+        
+        Vec3 n(
+            atof(line.arguments[0].part[0].c_str()),
+            -atof(line.arguments[1].part[0].c_str()),
+            atof(line.arguments[2].part[0].c_str())
+        );
+        
+        normals.push_back(n);
+        
+        return true;
     }
     
     char* findLineEnd(char* start) {
@@ -585,14 +630,19 @@ struct ModelLoader {
         if(line.type == "#")
             return line;
         
+        int count = 0;
+        
         while(start < end) {
             start = consumeWhitespace(start, end);
             LineArgument lineArg;
             
+            if(++count == 10000)
+                throw "Too many iterations";
+            
             while(start < end) {
                 string arg;
                 
-                while(start < end && (*start == '.' || isdigit(*start) || *start == '-' || isalpha(*start))) {
+                while(start < end && (*start == '.' || isdigit(*start) || *start == '-' || isalpha(*start) || *start == '_')) {
                     arg += *start;
                     ++start;
                 }
@@ -643,21 +693,26 @@ void buildTestScene(Renderer& renderer) {
         Vec3(w, y, d)
     };
     
+    Vec3 center = Vec3(0, 0, 0);
+    
+    for(int i = 0; i < 4; ++i) {
+        center = center +  v[i] * (1.0 / 4);
+    }
     
     Triangle* tri1 = new Triangle(
         v[0],
-        v[1],
-        v[2]
+        v[2],
+        v[1]
     );
     
-    tri1->color = Color(0, 0, 1);
+    tri1->color = Color(0, 0, .5);
     tri1->material = mat;
     
     Triangle* tri2 = new Triangle (
-        v[2], v[3], v[0]
+        v[2], v[0], v[3]
     );
     
-    tri2->color = Color(0, 0, 1);
+    tri2->color = Color(0, 0, .5);
     tri2->material = mat;
     
     //renderer.addObjectToScene(sphere);
@@ -666,15 +721,15 @@ void buildTestScene(Renderer& renderer) {
     
     Light light;
     light.color = Vec3(1, 1, 1);
-    light.dir = Vec3(0, 1, 0);
-    light.pos = Vec3(0, 0, -1000);
+    light.pos = Vec3(-1000, -1000, 0);
+    light.lookAt(center);
     light.intensity = .5;
     
     
     ModelLoader loader;
     
     try {
-        vector<Triangle> triangles = loader.loadFile("teapot.obj");
+        vector<Triangle> triangles = loader.loadFile("alfa147.obj");
         renderer.addTriangle(triangles);
     }
     catch(string s) {
