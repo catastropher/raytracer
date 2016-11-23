@@ -285,13 +285,17 @@ struct Sphere : Shape {
             //cout << d[0] << " " << d[1] << endl;
         }
         
+        int validCount = 0;
         for(int i = 0; i < totalIntersections; ++i) {
-            intersectDest[i].pos = ray.calculatePointOnLine(d[i]);
-            intersectDest[i].normal = calculateNormalAtPoint(intersectDest[i].pos);
-            intersectDest[i].shape = this;
+            if(d[i] > 0) {
+                intersectDest[validCount].pos = ray.calculatePointOnLine(d[i]);
+                intersectDest[validCount].normal = calculateNormalAtPoint(intersectDest[i].pos);
+                intersectDest[validCount].shape = this;
+                ++validCount;
+            }
         }
         
-        return totalIntersections;
+        return validCount;
     }
     
     Vec3 calculateNormalAtPoint(Vec3& point) const {
@@ -346,7 +350,7 @@ struct Renderer {
     Vec3 camPosition;
     
     Renderer(float angle, float w, float h) {
-        screen(640, 480);
+        screen(w, h);
         
         screenW = w;
         screenH = h;
@@ -365,7 +369,7 @@ struct Renderer {
     Ray calculateRayForPixelOnScreen(int x, int y) {
         Vec3 pixelPos(x - w / 2, y - h / 2, distToScreen);
         
-        return Ray(camPosition, pixelPos);
+        return Ray(camPosition, pixelPos + camPosition);
     }
     
     Color calculateOnlySpecularHightlights(const Shape* shape, Vec3& objNormal, Vec3& pointOnObj) {
@@ -432,7 +436,7 @@ struct Renderer {
                     float alpha = .9;
                     float fresnelEffect = pow(1 - dot, 3) * (1 - alpha) + 1 * alpha;
                     
-                    rayColor = reflectedRayColor * fresnelEffect + calculateOnlySpecularHightlights(closestIntersection.shape, closestIntersection.normal, closestIntersection.pos);
+                    rayColor = (reflectedRayColor * fresnelEffect + calculateOnlySpecularHightlights(closestIntersection.shape, closestIntersection.normal, closestIntersection.pos)).maxValue(1.0);
                 }
             }
             else {
@@ -466,6 +470,19 @@ struct Renderer {
         for(Triangle t : triangles) {
             addObjectToScene(new Triangle(t));
         }
+    }
+    
+    void addQuad(Vec3 v[4], Material& mat, Color color) {
+        Triangle* t1 = new Triangle(v[0], v[2], v[0]);
+        t1->material = mat;
+        t1->color = color;
+        
+        Triangle* t2 = new Triangle(v[2], v[0], v[3]);
+        t2->material = mat;
+        t2->color = color;
+        
+        addObjectToScene(t1);
+        addObjectToScene(t2);
     }
     
     void raytrace() {
@@ -558,7 +575,7 @@ struct ModelLoader {
     }
     
     void addTriangle(int v0, int v1, int v2) {
-        Material mat = Material(.9, 1.0, 150, true);
+        Material mat = Material(.9, 1.0, 50, true);
         
         Triangle triangle(vertices[v0], vertices[v1], vertices[v2]);
         triangle.color = Vec3(.5, .5, .5);
@@ -708,8 +725,8 @@ void buildTestScene(Renderer& renderer) {
     
     mat.alpha = 100.0;
     mat.diffuse = .5;
-    mat.specular = .4;
-    mat.reflective = false;
+    mat.specular = 1.0;
+    mat.reflective = true;
     
     
     Sphere* sphere = new Sphere();
@@ -720,6 +737,16 @@ void buildTestScene(Renderer& renderer) {
     sphere->center = Vec3(-100, -20, 400);
     sphere->color = Vec3(1, 0, 0);
     sphere->material = mat;
+    
+    mat.reflective = false;
+    
+    Sphere* sphere2 = new Sphere();
+        
+    sphere2->radius = 20;
+    sphere2->center = Vec3(-25, -20, 400 - 75);
+    sphere2->color = Vec3(1, 0, 0);
+    sphere2->material = mat;
+    
     
     float w = 400, h = 5000;
     float y = 0;
@@ -737,26 +764,13 @@ void buildTestScene(Renderer& renderer) {
     for(int i = 0; i < 4; ++i) {
         center = center +  v[i] * (1.0 / 4);
     }
+
     
-    Triangle* tri1 = new Triangle(
-        v[0],
-        v[2],
-        v[1]
-    );
+    renderer.addQuad(v, mat, Vec3(0, 0, 1.0));
     
-    tri1->color = Color(0, 0, 1);
-    tri1->material = mat;
-    
-    Triangle* tri2 = new Triangle (
-        v[2], v[0], v[3]
-    );
-    
-    tri2->color = Color(0, 0, 1);
-    tri2->material = mat;
     
     renderer.addObjectToScene(sphere);
-    renderer.addObjectToScene(tri1);
-    renderer.addObjectToScene(tri2);
+    renderer.addObjectToScene(sphere2);
     
     Light light;
     light.color = Vec3(1, 1, 1);
@@ -788,7 +802,7 @@ int main(int argc, char* argv[]) {
     
     renderer.ambientLightIntensity = .1;
     
-    renderer.camPosition = Vec3(0, -100, 200);
+    renderer.camPosition = Vec3(0, -100, 100);
     
     cls(RGB_Black);
     
