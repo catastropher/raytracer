@@ -201,6 +201,9 @@ struct Triangle : Shape {
         
         //cout << intersectDest.toString() << endl;
         
+        if(ray.dir.neg().dot(plane.normal) < 0)
+            return 0;
+        
         Vec3 w = (intersectDest->pos - p[0]);
         
         float uv = u.dot(v);
