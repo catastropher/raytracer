@@ -2,14 +2,20 @@
 #include <cmath>
 #include <assert.h>
 
-#include "quickcg.h"
+#ifdef __WITH_SDL__
+  #include "quickcg.h"
+#endif
+
 #include "Renderer.hpp"
 #include "Sphere.hpp"
 #include "Vec3.hpp"
 #include "ModelLoader.hpp"
 
 using namespace std;
+
+#ifdef __WITH_SDL__
 using namespace QuickCG;
+#endif
 
 Sphere* sp;
 
@@ -96,16 +102,20 @@ int main(int argc, char* argv[]) {
     renderer.ambientLightIntensity = .1;
     
     renderer.camPosition = Vec3(0, -100, 100);
-    
-    cls(RGB_Black);
-    
+  
     buildTestScene(renderer);
+    
+#ifdef __WITH_SDL__
+    cls(RGB_Black);
+#endif
     
     renderer.raytrace();
     
+#ifdef __WITH_SDL__
     while(!done()) {
         //++sp->center.z;
         redraw();
     }
+#endif
 }
 

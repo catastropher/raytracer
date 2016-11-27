@@ -8,7 +8,10 @@
 #include "Ray.hpp"
 #include "Shape.hpp"
 #include "Triangle.hpp"
-#include "quickcg.h"
+
+#ifdef __WITH_SDL__
+  #include "quickcg.h"
+#endif
 
 struct Renderer {
     float screenW, screenH;
@@ -23,7 +26,9 @@ struct Renderer {
     Vec3 camPosition;
     
     Renderer(float angle, float w, float h) {
+#ifdef __WITH_SDL__
         QuickCG::screen(w, h);
+#endif
         
         screenW = w;
         screenH = h;
@@ -170,11 +175,15 @@ struct Renderer {
                 
                 Color rayColor = traceRay(ray, 0, NULL) * 255;
                 
+#ifdef __WITH_SDL__
                 QuickCG::pset(j, i, QuickCG::ColorRGB(rayColor.x, rayColor.y, rayColor.z));
+#endif
             }
            
+#ifdef __WITH_SDL__
             QuickCG::redraw();
             QuickCG::redraw();
+#endif
             std::cout << (i * 100 / screenH) << "%" << std::endl;
         }
     }
