@@ -5,15 +5,28 @@ set(RAYTRACE_SOURCES raytrace.cpp)
 project(raytrace)
 
 find_package(SDL)
+find_package(CUDA)
 
 if(SDL_FOUND)
   list(APPEND RAYTRACE_SOURCES quickcg.cpp)
   add_definitions(-D__WITH_SDL__)
 endif()
-  
-add_executable(raytrace
-  ${RAYTRACE_SOURCES}
-)
+
+set(USE_CUDA false)
+
+if(CUDA_FOUND)
+    set(USE_CUDA true)
+endif()
+
+if(USE_CUDA)
+    add_cuda_executable(raytrace
+        ${RAYTRACE_SOURCES}
+    )
+else()
+    add_executable(raytrace
+        ${RAYTRACE_SOURCES}
+    )
+endif()
   
 if(SDL_FOUND)
   target_link_libraries(raytrace SDL)
