@@ -97,11 +97,12 @@ void buildTestScene(Renderer& renderer) {
     //renderer.addLight(light2);
 }
 
-int main(int argc, char* argv[]) {    
-    Renderer renderer(60.0, 1024, 768);
+int main(int argc, char* argv[]) {   
     bool saveFrame = false;
     bool loadFrame = false;
     string frameFileName;
+    int w = 640;
+    int h = 480;
     
     for(int i = 1; i < argc; ++i) {
         if(strcmp(argv[i], "--save") == 0) {
@@ -112,9 +113,15 @@ int main(int argc, char* argv[]) {
             loadFrame = true;
             frameFileName = argv[++i];
         }
+        else if(strcmp(argv[i], "-w") == 0) {
+            w = atoi(argv[++i]);
+        }
+        else if(strcmp(argv[i], "-h") == 0) {
+            h = atoi(argv[++i]);
+        }
     }
     
-    
+    Renderer renderer(60.0, w, h);
     
     renderer.ambientLightIntensity = .1;
     renderer.camPosition = Vec3(0, -100, 100);

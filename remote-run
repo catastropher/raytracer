@@ -3,4 +3,4 @@
 cd raytracer/build
 cmake ..
 make
-./raytrace --save "out.img"
+./raytrace --save "out.img" -w 640 -h 480

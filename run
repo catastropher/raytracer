@@ -3,4 +3,4 @@ ssh mww12@tesla2.cs.uakron.edu 'bash -s' < remote-run
 scp mww12@tesla2.cs.uakron.edu:raytrace/build/out.img .
 cd build
 make
-./raytrace --load "../out.img"
+./raytrace --load "out.img"

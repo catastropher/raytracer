@@ -216,6 +216,8 @@ struct Renderer {
         
         fscanf(file, "%d %d", &screenW, &screenH);
         
+        *this = Renderer(viewAngle, screenW, screenH);
+        
         for(int i = 0; i < screenW * screenH; ++i) {
             Color& c = frameBuffer[i];
             fscanf(file, "%f %f %f", &c.x, &c.y, &c.z);
