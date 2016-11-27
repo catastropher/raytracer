@@ -2,6 +2,7 @@
 
 #include <vector>
 #include <iostream>
+#include <cstdlib>
 
 #include "Material.hpp"
 #include "Light.hpp"
@@ -14,7 +15,7 @@
 #endif
 
 struct Renderer {
-    float screenW, screenH;
+    int screenW, screenH;
     float viewAngle;
     float distToScreen;
     
@@ -25,13 +26,15 @@ struct Renderer {
     
     Vec3 camPosition;
     
-    Renderer(float angle, float w, float h) {
+    Color* frameBuffer;
+    
+    Renderer(float angle, int w, int h) {
 #ifdef __WITH_SDL__
         QuickCG::screen(w, h);
 #endif
-        
         screenW = w;
         screenH = h;
+        frameBuffer = new Color[w * h];
         viewAngle = angle;
         distToScreen = (w / 2 ) / tan(degToRadians(angle / 2));
         
@@ -174,6 +177,7 @@ struct Renderer {
                 Ray ray = calculateRayForPixelOnScreen(j, i);
                 
                 Color rayColor = traceRay(ray, 0, NULL) * 255;
+                frameBuffer[i * screenW + j] = rayColor;
                 
 #ifdef __WITH_SDL__
                 QuickCG::pset(j, i, QuickCG::ColorRGB(rayColor.x, rayColor.y, rayColor.z));
@@ -187,4 +191,46 @@ struct Renderer {
             std::cout << (i * 100 / screenH) << "%" << std::endl;
         }
     }
+    
+    void saveFrameBuffer(std::string fileName) {
+        FILE* file = fopen(fileName.c_str(), "wb");
+        
+        if(!file)
+            throw "Failed to open " + fileName + " for writing";
+        
+        fprintf(file, "%d %d\n", screenW, screenH);
+        
+        for(int i = 0; i < screenW * screenH; ++i) {
+            Color c = frameBuffer[i];
+            fprintf(file, "%f %f %f\n", c.x, c.y, c.z);
+        }
+        
+        fclose(file);
+    }
+    
+    void loadFrameBuffer(std::string fileName) {
+        FILE* file = fopen(fileName.c_str(), "rb");
+        
+        if(!file)
+            throw "Failed to open " + fileName + " for reading";
+        
+        fscanf(file, "%d %d", &screenW, &screenH);
+        
+        for(int i = 0; i < screenW * screenH; ++i) {
+            Color& c = frameBuffer[i];
+            fscanf(file, "%f %f %f", &c.x, &c.y, &c.z);
+        }
+        
+        fclose(file);
+    }
+    
+    void displayFrameBuffer() {
+#ifdef __WITH_SDL__
+        for(int i = 0; i < screenW * screenH; ++i) {
+            Color c = frameBuffer[i];
+            QuickCG::pset(i % screenW, i / screenW, QuickCG::ColorRGB(c.x, c.y, c.z));
+        }
+#endif
+    }
 };
+

@@ -6,8 +6,6 @@ project(raytrace)
 
 find_package(SDL)
 
-set(SDL_FOUND false)
-
 if(SDL_FOUND)
   list(APPEND RAYTRACE_SOURCES quickcg.cpp)
   add_definitions(-D__WITH_SDL__)

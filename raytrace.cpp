@@ -1,6 +1,7 @@
 #include <iostream>
 #include <cmath>
 #include <assert.h>
+#include <cstring>
 
 #ifdef __WITH_SDL__
   #include "quickcg.h"
@@ -98,18 +99,42 @@ void buildTestScene(Renderer& renderer) {
 
 int main(int argc, char* argv[]) {    
     Renderer renderer(60.0, 1024, 768);
+    bool saveFrame = false;
+    bool loadFrame = false;
+    string frameFileName;
+    
+    for(int i = 1; i < argc; ++i) {
+        if(strcmp(argv[i], "--save") == 0) {
+            saveFrame = true;
+            frameFileName = argv[++i];
+        }
+        else if(strcmp(argv[i], "--load") == 0) {
+            loadFrame = true;
+            frameFileName = argv[++i];
+        }
+    }
+    
+    
     
     renderer.ambientLightIntensity = .1;
-    
     renderer.camPosition = Vec3(0, -100, 100);
-  
     buildTestScene(renderer);
     
 #ifdef __WITH_SDL__
     cls(RGB_Black);
 #endif
     
-    renderer.raytrace();
+    if(loadFrame) {
+        renderer.loadFrameBuffer(frameFileName);
+        renderer.displayFrameBuffer();
+    }
+    else {
+        renderer.raytrace();
+    }
+    
+    if(saveFrame) {
+        renderer.saveFrameBuffer(frameFileName);
+    }
     
 #ifdef __WITH_SDL__
     while(!done()) {

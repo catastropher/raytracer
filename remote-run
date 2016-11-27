@@ -1,0 +1,6 @@
+#!/bin/bash
+
+cd raytracer/build
+cmake ..
+make
+./raytrace --save "out.img"
