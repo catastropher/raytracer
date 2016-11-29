@@ -21,7 +21,7 @@ if(CUDA_FOUND)
 endif()
 
 if(USE_CUDA)
-    add_cuda_executable(raytrace
+    cuda_add_executable(raytrace
         ${RAYTRACE_SOURCES}
     )
 else()
