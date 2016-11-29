@@ -73,6 +73,8 @@ struct CPURayTracer {
 struct Renderer {
     Color* frameBuffer;
     
+    Color backgroundColor;
+    
     int screenW, screenH;
     float viewAngle;
     float distToScreen;
@@ -181,33 +183,32 @@ struct RayTracer {
         return closestIntersection.shape != NULL;
     }
     
-    Color traceRay(const Ray& ray, int depth, const Shape* lastReflection) {
-        Color rayColor = Vec3(0, 0, 0);
+    Color traceRay(const Ray& ray, int recursionDepth, const Shape* lastReflection) {
         Intersection<Shape> closestIntersection;
-        
-        
         bool hitAtLeastOneObject = findNearestRayIntersection(ray, lastReflection, closestIntersection);
         
-        if(hitAtLeastOneObject) {
-            if(closestIntersection.shape->material.reflective) {
-                if(depth < 5) {
-                    Ray reflectedRay = ray.reflectAboutNormal(closestIntersection.normal, closestIntersection.pos);
-                    
-                    Color reflectedRayColor = traceRay(reflectedRay, depth + 1, closestIntersection.shape);
-                    
-                    float dot = -ray.dir.dot(closestIntersection.normal);
-                    float alpha = .9;
-                    float fresnelEffect = pow(1 - dot, 3) * (1 - alpha) + 1 * alpha;
-                    
-                    rayColor = (reflectedRayColor * fresnelEffect + calculateOnlySpecularHightlights(closestIntersection.shape, closestIntersection.normal, closestIntersection.pos)).maxValue(1.0);
-                }
-            }
-            else {
-                rayColor = calculateLighting(closestIntersection.shape, closestIntersection.normal, closestIntersection.pos);
-            }
-        }
+        if(!hitAtLeastOneObject)
+            return renderer.backgroundColor;
         
-        return rayColor;
+        if(closestIntersection.shape->material.reflective)
+            return calculateReflectedRayColor(ray, closestIntersection, recursionDepth);
+        
+        return calculateLighting(closestIntersection.shape, closestIntersection.normal, closestIntersection.pos);
+    }
+    
+    Color calculateReflectedRayColor(const Ray& ray, Intersection<Shape>& closestIntersection, int recursionDepth) {
+        if(recursionDepth > 5)
+            return renderer.backgroundColor;
+        
+        Ray reflectedRay = ray.reflectAboutNormal(closestIntersection.normal, closestIntersection.pos);
+                    
+        Color reflectedRayColor = traceRay(reflectedRay, recursionDepth + 1, closestIntersection.shape);
+        
+        float dot = -ray.dir.dot(closestIntersection.normal);
+        float alpha = .9;
+        float fresnelEffect = pow(1 - dot, 3) * (1 - alpha) + 1 * alpha;
+        
+        return (reflectedRayColor * fresnelEffect + calculateOnlySpecularHightlights(closestIntersection.shape, closestIntersection.normal, closestIntersection.pos)).maxValue(1.0);
     }
     
     void raytrace() {
