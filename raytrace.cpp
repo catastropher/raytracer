@@ -1,3 +1,5 @@
+#include "config.hpp"
+
 #include <iostream>
 #include <cmath>
 #include <assert.h>
