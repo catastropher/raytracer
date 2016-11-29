@@ -9,6 +9,10 @@
   #include "quickcg.h"
 #endif
 
+#ifdef __WIDTH_CUDA__
+    #include "Cuda.hpp"
+#endif
+
 #include "Renderer.hpp"
 #include "Sphere.hpp"
 #include "Vec3.hpp"
@@ -105,6 +109,12 @@ int main(int argc, char* argv[]) {
     string frameFileName;
     int w = 640;
     int h = 480;
+    
+#ifdef __WIDTH_CUDA__
+    launchCudaKernel();
+    return 0;
+#endif
+    
     
     for(int i = 1; i < argc; ++i) {
         if(strcmp(argv[i], "--save") == 0) {

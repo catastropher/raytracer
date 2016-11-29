@@ -22,7 +22,6 @@ static inline float degToRadians(float deg) {
     return deg * PI / 180.0;
 }
 
-
 struct CPURayTracer {
     Scene& scene;
     
