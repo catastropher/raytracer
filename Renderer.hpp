@@ -3,32 +3,37 @@
 #include <vector>
 #include <iostream>
 #include <cstdlib>
+#include <cstdio>
 
 #include "Material.hpp"
 #include "Light.hpp"
 #include "Ray.hpp"
 #include "Shape.hpp"
 #include "Triangle.hpp"
+#include "Sphere.hpp"
+#include "Scene.hpp"
 
 #ifdef __WITH_SDL__
   #include "quickcg.h"
 #endif
 
+struct CPURayTracer {
+    Triangle* findClosestIntersectedTriangle();
+};
+
+static inline float degToRadians(float deg) {
+    const float PI = 3.1415926535897;
+    return deg * PI / 180.0;
+}
+
 struct Renderer {
+    Color* frameBuffer;
+    
     int screenW, screenH;
     float viewAngle;
     float distToScreen;
     
-    std::vector<Shape* > shapesInScene;
-    
-    float ambientLightIntensity;
-    std::vector<Light> lightsInScene;
-    
-    Vec3 camPosition;
-    
-    Color* frameBuffer;
-    
-    Renderer(float angle, int w, int h) {
+    void initialize(float angle, int w, int h) {
 #ifdef __WITH_SDL__
         QuickCG::screen(w, h);
 #endif
@@ -39,44 +44,84 @@ struct Renderer {
         distToScreen = (w / 2 ) / tan(degToRadians(angle / 2));
         
         std::cout << "Dist to screen: " << distToScreen << std::endl;
+    }
+    
+    void saveFrameBuffer(std::string fileName) {
+        FILE* file = fopen(fileName.c_str(), "wb");
         
-        camPosition = Vec3(0, 0, 0);
+        if(!file)
+            throw "Failed to open " + fileName + " for writing";
+        
+        fprintf(file, "%d %d\n", screenW, screenH);
+        
+        for(int i = 0; i < screenW * screenH; ++i) {
+            Color c = frameBuffer[i];
+            fprintf(file, "%f %f %f\n", c.x, c.y, c.z);
+        }
+        
+        fclose(file);
     }
     
-    float degToRadians(float deg) {
-        const float PI = 3.1415926535897;
-        return deg * PI / 180.0;
+    void loadFrameBuffer(std::string fileName) {
+        FILE* file = fopen(fileName.c_str(), "rb");
+        
+        if(!file)
+            throw "Failed to open " + fileName + " for reading";
+        
+        fscanf(file, "%d %d", &screenW, &screenH);
+        
+        initialize(viewAngle, screenW, screenH);
+        
+        for(int i = 0; i < screenW * screenH; ++i) {
+            Color& c = frameBuffer[i];
+            fscanf(file, "%f %f %f", &c.x, &c.y, &c.z);
+        }
+        
+        fclose(file);
     }
     
-    void addLight(Light light) {
-        lightsInScene.push_back(light);
+    void displayFrameBuffer() {
+#ifdef __WITH_SDL__
+        for(int i = 0; i < screenW * screenH; ++i) {
+            Color c = frameBuffer[i];
+            QuickCG::pset(i % screenW, i / screenW, QuickCG::ColorRGB(c.x, c.y, c.z));
+        }
+#endif
     }
+};
+
+struct RayTracer {
+    std::vector<Shape* > shapesInScene;
+    
+    Scene scene;
+    
+    Renderer renderer;
     
     Ray calculateRayForPixelOnScreen(int x, int y) {
-        Vec3 pixelPos(x - screenW / 2, y - screenH / 2, distToScreen);
+        Vec3 pixelPos(x - renderer.screenW / 2, y - renderer.screenH / 2, renderer.distToScreen);
         
-        return Ray(camPosition, pixelPos + camPosition);
+        return Ray(scene.camPosition, pixelPos + scene.camPosition);
     }
     
     Color calculateOnlySpecularHightlights(const Shape* shape, Vec3& objNormal, Vec3& pointOnObj) {
         Color result = Vec3(0, 0, 0);
         
-        for(Light& light : lightsInScene) {
-            result = result + light.calculateSpecular(shape->material, pointOnObj, camPosition, objNormal);
+        for(Light* light = scene.lights.begin(); light != scene.lights.end(); ++light) {
+            result = result + light->calculateSpecular(shape->material, pointOnObj, scene.camPosition, objNormal);
         }
         
         return result;
     }
     
     Color calculateLighting(const Shape* shape, Vec3& objNormal, Vec3& pointOnObj) {
-        Color result = shape->color * ambientLightIntensity;
+        Color result = shape->color * scene.ambientLightIntensity;
         
-        for(Light& light : lightsInScene) {
-            Ray lightRay(pointOnObj, light.pos);
+        for(Light* light = scene.lights.begin(); light != scene.lights.end(); ++light) {
+            Ray lightRay(pointOnObj, light->pos);
             Intersection closestIntersection;
             
             if(!findNearestRayIntersection(lightRay, shape, closestIntersection))
-                result = result + light.evaluatePhongReflectionModel(shape->material, shape->color, objNormal, pointOnObj, camPosition);
+                result = result + light->evaluatePhongReflectionModel(shape->material, shape->color, objNormal, pointOnObj, scene.camPosition);
         }
         
         return result.maxValue(1.0);
@@ -91,7 +136,7 @@ struct Renderer {
         
         int count = 0;
         
-        for(Shape* shape : shapesInScene) {
+        for(Triangle* shape = scene.triangles.begin(); shape != scene.triangles.end(); ++shape) {
             if(shape == lastReflection)
                 continue;
             
@@ -133,13 +178,9 @@ struct Renderer {
         return rayColor;
     }
     
-    float distanceBetween(Vec3& v0, Vec3& v1) {
-        return (v1 - v0).length();
-    }
-    
     void findClosestIntersection(Vec3 start, Intersection& closestIntersection, Intersection* intersections, int totalIntersections, float& minDist) {
         for(int i = 0; i < totalIntersections; ++i) {
-            float dist = distanceBetween(start, intersections[i].pos);
+            float dist = start.distanceBetween(intersections[i].pos);
             
             if(dist < minDist) {
                 minDist = dist;
@@ -148,36 +189,13 @@ struct Renderer {
         }
     }
     
-    void addObjectToScene(Shape* shape) {
-        shapesInScene.push_back(shape);
-    }
-    
-    void addTriangle(std::vector<Triangle> triangles) {
-        for(Triangle t : triangles) {
-            addObjectToScene(new Triangle(t));
-        }
-    }
-    
-    void addQuad(Vec3 v[4], Material& mat, Color color) {
-        Triangle* t1 = new Triangle(v[0], v[2], v[0]);
-        t1->material = mat;
-        t1->color = color;
-        
-        Triangle* t2 = new Triangle(v[2], v[0], v[3]);
-        t2->material = mat;
-        t2->color = color;
-        
-        addObjectToScene(t1);
-        addObjectToScene(t2);
-    }
-    
     void raytrace() {
-        for(int i = 0; i < screenH; ++i) {
-            for(int j = 0; j < screenW; ++j) {
+        for(int i = 0; i < renderer.screenH; ++i) {
+            for(int j = 0; j < renderer.screenW; ++j) {
                 Ray ray = calculateRayForPixelOnScreen(j, i);
                 
                 Color rayColor = traceRay(ray, 0, NULL) * 255;
-                frameBuffer[i * screenW + j] = rayColor;
+                renderer.frameBuffer[i * renderer.screenW + j] = rayColor;
                 
 #ifdef __WITH_SDL__
                 QuickCG::pset(j, i, QuickCG::ColorRGB(rayColor.x, rayColor.y, rayColor.z));
@@ -188,51 +206,8 @@ struct Renderer {
             QuickCG::redraw();
             QuickCG::redraw();
 #endif
-            std::cout << (i * 100 / screenH) << "%" << std::endl;
+            std::cout << (i * 100 / renderer.screenH) << "%" << std::endl;
         }
-    }
-    
-    void saveFrameBuffer(std::string fileName) {
-        FILE* file = fopen(fileName.c_str(), "wb");
-        
-        if(!file)
-            throw "Failed to open " + fileName + " for writing";
-        
-        fprintf(file, "%d %d\n", screenW, screenH);
-        
-        for(int i = 0; i < screenW * screenH; ++i) {
-            Color c = frameBuffer[i];
-            fprintf(file, "%f %f %f\n", c.x, c.y, c.z);
-        }
-        
-        fclose(file);
-    }
-    
-    void loadFrameBuffer(std::string fileName) {
-        FILE* file = fopen(fileName.c_str(), "rb");
-        
-        if(!file)
-            throw "Failed to open " + fileName + " for reading";
-        
-        fscanf(file, "%d %d", &screenW, &screenH);
-        
-        *this = Renderer(viewAngle, screenW, screenH);
-        
-        for(int i = 0; i < screenW * screenH; ++i) {
-            Color& c = frameBuffer[i];
-            fscanf(file, "%f %f %f", &c.x, &c.y, &c.z);
-        }
-        
-        fclose(file);
-    }
-    
-    void displayFrameBuffer() {
-#ifdef __WITH_SDL__
-        for(int i = 0; i < screenW * screenH; ++i) {
-            Color c = frameBuffer[i];
-            QuickCG::pset(i % screenW, i / screenW, QuickCG::ColorRGB(c.x, c.y, c.z));
-        }
-#endif
     }
 };
 

@@ -22,7 +22,7 @@ using namespace QuickCG;
 
 Sphere* sp;
 
-void buildTestScene(Renderer& renderer) {
+void buildTestScene(SceneBuilder& builder) {
     Material mat;
     
     mat.alpha = 100.0;
@@ -68,11 +68,11 @@ void buildTestScene(Renderer& renderer) {
     }
 
     
-    renderer.addQuad(v, mat, Vec3(0, 0, 1.0));
+    builder.addQuad(v, mat, Vec3(0, 0, 1.0));
     
     
-    renderer.addObjectToScene(sphere);
-    renderer.addObjectToScene(sphere2);
+    builder.addSphere(*sphere);
+    builder.addSphere(*sphere2);
     
     Light light;
     light.color = Vec3(1, 1, 1);
@@ -88,14 +88,14 @@ void buildTestScene(Renderer& renderer) {
     
     try {
         vector<Triangle> triangles = loader.loadFile("../teapot.obj");
-        renderer.addTriangle(triangles);
+        builder.addTriangles(triangles);
     }
     catch(string s) {
         cerr << "Error: " << s << endl;
         exit(-1);
     }
     
-    renderer.addLight(light);
+    builder.addLight(light);
     //renderer.addLight(light2);
 }
 
@@ -123,26 +123,32 @@ int main(int argc, char* argv[]) {
         }
     }
     
-    Renderer renderer(60.0, w, h);
+    RayTracer tracer;
+    tracer.renderer.initialize(60.0, w, h);
     
-    renderer.ambientLightIntensity = .1;
-    renderer.camPosition = Vec3(0, -100, 100);
-    buildTestScene(renderer);
+    SceneBuilder builder;
+    
+    builder.ambientLightIntensity = .1;
+    builder.camPosition = Vec3(0, -100, 100);
+    buildTestScene(builder);
+    
+    tracer.scene = builder.buildScene();
+    
     
 #ifdef __WITH_SDL__
     cls(RGB_Black);
 #endif
     
     if(loadFrame) {
-        renderer.loadFrameBuffer(frameFileName);
-        renderer.displayFrameBuffer();
+        tracer.renderer.loadFrameBuffer(frameFileName);
+        tracer.renderer.displayFrameBuffer();
     }
     else {
-        renderer.raytrace();
+        tracer.raytrace();
     }
     
     if(saveFrame) {
-        renderer.saveFrameBuffer(frameFileName);
+        tracer.renderer.saveFrameBuffer(frameFileName);
     }
     
 #ifdef __WITH_SDL__

@@ -8,6 +8,8 @@ struct Triangle : Shape {
     Plane plane;
     Vec3 normals[3];
     
+    Triangle() { }
+    
     Triangle(Vec3 p0, Vec3 p1, Vec3 p2) {
         p[0] = p0;
         p[1] = p1;

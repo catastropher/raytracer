@@ -65,6 +65,10 @@ struct Vec3 {
         return x * v.x + y * v.y + z * v.z;
     }
     
+    CUDA_CALLABLE float distanceBetween(Vec3& v) {
+        return (*this - v).length();
+    }
+    
     std::string toString() const {
         char str[128];
         sprintf(str, "{ %f, %f, %f }", x, y, z);
