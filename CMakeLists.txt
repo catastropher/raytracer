@@ -17,7 +17,7 @@ set(USE_CUDA false)
 if(CUDA_FOUND)
     set(USE_CUDA true)
     add_definitions(-D__WITH_CUDA__)
-    list(APPEND RAYTRACE_SOURCES cuda.cpp)
+    list(APPEND RAYTRACE_SOURCES Cuda.cpp)
 endif()
 
 if(USE_CUDA)
