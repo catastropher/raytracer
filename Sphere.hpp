@@ -7,7 +7,7 @@ struct Sphere : Shape {
     Vec3 center;
     
     // Returns the number of intersections found
-    int calculateRayIntersections(const Ray& ray, Intersection<Sphere>* intersectDest) const {
+    CUDA_CALLABLE int calculateRayIntersections(const Ray& ray, Intersection<Sphere>* intersectDest) const {
         float xA = ray.v[0].x;
         float yA = ray.v[0].y;
         float zA = ray.v[0].z;
@@ -58,7 +58,7 @@ struct Sphere : Shape {
         return validCount;
     }
     
-    Vec3 calculateNormalAtPoint(Vec3& point) const {
+    CUDA_CALLABLE Vec3 calculateNormalAtPoint(Vec3& point) const {
         return (point - center).normalize();
     }
 };

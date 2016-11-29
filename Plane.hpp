@@ -6,7 +6,7 @@ struct Plane {
     Vec3 normal;
     float d;
     
-    bool calculateRayIntersection(const Ray& ray, Vec3& intersectDest) const {
+    CUDA_CALLABLE bool calculateRayIntersection(const Ray& ray, Vec3& intersectDest) const {
         float den = ray.dir.dot(normal);
         
         if(den == 0)
@@ -22,11 +22,11 @@ struct Plane {
         return true;
     }
     
-    Plane(const Vec3& p, const Vec3& u, const Vec3& v) {
+    CUDA_CALLABLE Plane(const Vec3& p, const Vec3& u, const Vec3& v) {
         normal = u.cross(v).normalize();
         d = -p.dot(normal);
     }
     
-    Plane() { }
+    CUDA_CALLABLE Plane() { }
 };
 

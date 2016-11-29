@@ -9,7 +9,7 @@
   #include "quickcg.h"
 #endif
 
-#ifdef __WIDTH_CUDA__
+#ifdef __WITH_CUDA__
     #include "Cuda.hpp"
 #endif
 
@@ -110,7 +110,8 @@ int main(int argc, char* argv[]) {
     int w = 640;
     int h = 480;
     
-#ifdef __WIDTH_CUDA__
+#ifdef __WITH_CUDA__
+    printf("Invoking CUDA kernel\n");
     launchCudaKernel();
     return 0;
 #endif

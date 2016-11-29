@@ -1,6 +1,8 @@
 #!/bin/bash
+scp *.hpp *.cpp *.txt *.cu mww12@tesla2.cs.uakron.edu:~/raytracer
 ssh mww12@tesla2.cs.uakron.edu 'bash -s' < remote-run
-if [%1 -ne "remote"]
+if [ "$1"    != "remote" ]
+    then
     scp mww12@tesla2.cs.uakron.edu:~/raytracer/build/out.img .
     pwd
     cd build

@@ -1,6 +1,7 @@
 #!/bin/bash
 
-cd raytracer/build
+cd ~/raytracer/build
+make clean
 cmake ..
 make
 ./raytrace --save "out.img" -w 640 -h 480

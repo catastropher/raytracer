@@ -8,9 +8,9 @@ struct Triangle : Shape {
     Plane plane;
     Vec3 normals[3];
     
-    Triangle() { }
+    CUDA_CALLABLE Triangle() { }
     
-    Triangle(Vec3 p0, Vec3 p1, Vec3 p2) {
+    CUDA_CALLABLE Triangle(Vec3 p0, Vec3 p1, Vec3 p2) {
         p[0] = p0;
         p[1] = p1;
         p[2] = p2;
@@ -24,7 +24,7 @@ struct Triangle : Shape {
         normals[2] = plane.normal;
     }
     
-    int calculateRayIntersections(const Ray& ray, Intersection<Triangle>* intersectDest) const {
+    CUDA_CALLABLE int calculateRayIntersections(const Ray& ray, Intersection<Triangle>* intersectDest) const {
         Vec3 u = (p[1] - p[0]);
         Vec3 v = (p[2] - p[0]);
         
@@ -64,17 +64,17 @@ struct Triangle : Shape {
         return 1;
     }
     
-    void setNormals(Vec3 n0, Vec3 n1, Vec3 n2) {
+    CUDA_CALLABLE void setNormals(Vec3 n0, Vec3 n1, Vec3 n2) {
         normals[0] = n0;
         normals[1] = n1;
         normals[2] = n2;
     }
     
-    Vec3 calculateNormal(float u, float v) const {
+    CUDA_CALLABLE Vec3 calculateNormal(float u, float v) const {
         return normals[0] * (1.0 - u - v) + normals[1] * u + normals[2] * v;
     }
     
-    Vec3 calculateNormalAtPoint(Vec3& point) const {
+    CUDA_CALLABLE Vec3 calculateNormalAtPoint(Vec3& point) const {
         return plane.normal;
     }
 };

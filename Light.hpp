@@ -8,7 +8,7 @@ struct Light {
     float intensity;
     Vec3 dir;
     
-    Color calculateSpecular(const Material& mat, const Vec3& pointOnObj, const Vec3& camPos, const Vec3& objNormal) {
+    CUDA_CALLABLE Color calculateSpecular(const Material& mat, const Vec3& pointOnObj, const Vec3& camPos, const Vec3& objNormal) {
         Vec3 L = (pos - pointOnObj).normalize();
         Vec3 R = L.neg().reflectAboutNormal(objNormal);
         Vec3 V = (camPos - pointOnObj).normalize();
@@ -16,7 +16,7 @@ struct Light {
         return Color(1.0, 1.0, 1.0) * pow(std::max(0.0f, V.dot(R)), mat.alpha) * mat.specular * intensity;
     }
     
-    Color evaluatePhongReflectionModel(const Material& mat, const Color& objColor, const Vec3& objNormal, const Vec3& pointOnObj, const Vec3& camPos) {
+    CUDA_CALLABLE Color evaluatePhongReflectionModel(const Material& mat, const Color& objColor, const Vec3& objNormal, const Vec3& pointOnObj, const Vec3& camPos) {
         Vec3 L = (pos - pointOnObj).normalize();
         const Vec3& N = objNormal;
         

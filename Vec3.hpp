@@ -57,7 +57,11 @@ struct Vec3 {
     }
     
     CUDA_CALLABLE Vec3 maxValue(float maxValueAllowed) {
+#ifdef __WITH_CUDA__
+        return Vec3(fminf(maxValueAllowed, x), fminf(maxValueAllowed, y), fminf(maxValueAllowed, z));
+#else
         return Vec3(std::min(maxValueAllowed, x), std::min(maxValueAllowed, y), std::min(maxValueAllowed, z));
+#endif
     }
     
     CUDA_CALLABLE Vec3 reflectAboutNormal(const Vec3& normal) const {
