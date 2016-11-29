@@ -176,27 +176,8 @@ struct RayTracer {
         return result.maxValue(1.0);
     }
     
-    bool findNearestRayIntersection(const Ray& ray, const Shape* lastReflection, Intersection<Shape>& closestIntersection) {
-//         Intersection intersections[10];
-//         bool hitAtLeastOneObject = false;
-//         float minDist = 100000000;
-//         
-//         closestIntersection.shape = NULL;
-//         
-//         int count = 0;
-//         
-//         for(Triangle* shape = scene.triangles.begin(); shape != scene.triangles.end(); ++shape) {
-//             if(shape == lastReflection)
-//                 continue;
-//             
-//             int totalIntersections = shape->calculateRayIntersections(ray, intersections);
-//             count += totalIntersections;
-//             
-//             findClosestIntersection(ray.v[0], closestIntersection, intersections, totalIntersections, minDist);
-//         }
-        
+    bool findNearestRayIntersection(const Ray& ray, const Shape* lastReflection, Intersection<Shape>& closestIntersection) {        
         closestIntersection = tracer.findClosestIntersectedShape(ray, lastReflection).toGenericShapeIntersection();
-        
         return closestIntersection.shape != NULL;
     }
     
@@ -227,17 +208,6 @@ struct RayTracer {
         }
         
         return rayColor;
-    }
-    
-    void findClosestIntersection(Vec3 start, Intersection<Shape>& closestIntersection, Intersection<Shape>* intersections, int totalIntersections, float& minDist) {
-        for(int i = 0; i < totalIntersections; ++i) {
-            float dist = start.distanceBetween(intersections[i].pos);
-            
-            if(dist < minDist) {
-                minDist = dist;
-                closestIntersection = intersections[i];
-            }
-        }
     }
     
     void raytrace() {
