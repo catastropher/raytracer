@@ -7,7 +7,7 @@ struct Sphere : Shape {
     Vec3 center;
     
     // Returns the number of intersections found
-    int calculateRayIntersections(const Ray& ray, Intersection* intersectDest) const {
+    int calculateRayIntersections(const Ray& ray, Intersection<Sphere>* intersectDest) const {
         float xA = ray.v[0].x;
         float yA = ray.v[0].y;
         float zA = ray.v[0].z;
@@ -50,6 +50,7 @@ struct Sphere : Shape {
                 intersectDest[validCount].pos = ray.calculatePointOnLine(d[i]);
                 intersectDest[validCount].normal = calculateNormalAtPoint(intersectDest[i].pos);
                 intersectDest[validCount].shape = this;
+                intersectDest[validCount].distanceFromRayStartSquared = (intersectDest[validCount].pos - ray.v[0]).lengthSquared();
                 ++validCount;
             }
         }

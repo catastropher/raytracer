@@ -17,14 +17,58 @@
   #include "quickcg.h"
 #endif
 
-struct CPURayTracer {
-    Triangle* findClosestIntersectedTriangle();
-};
-
 static inline float degToRadians(float deg) {
     const float PI = 3.1415926535897;
     return deg * PI / 180.0;
 }
+
+
+struct CPURayTracer {
+    Scene& scene;
+    
+    CPURayTracer(Scene& scene_) : scene(scene_) { }
+    
+    Intersection<Triangle> findClosestIntersectedTriangle(const Ray& ray, const Shape* lastReflection) {
+        Intersection<Triangle> closestIntersection;
+        Intersection<Triangle> triIntersection;
+        
+        for(Triangle* tri = scene.triangles.begin(); tri != scene.triangles.end(); ++tri) {
+            if(tri != lastReflection && tri->calculateRayIntersections(ray, &triIntersection) != 0) {
+                closestIntersection = std::min(closestIntersection, triIntersection);
+            }
+        }
+        
+        return closestIntersection;
+    }
+    
+    Intersection<Sphere> findClosestIntersectedSphere(const Ray& ray, const Shape* lastReflection) {
+        Intersection<Sphere> closestIntersection;
+        Intersection<Sphere> sphereIntersections[2];
+        
+        for(Sphere* sphere = scene.spheres.begin(); sphere != scene.spheres.end(); ++sphere) {
+            if(sphere == lastReflection)
+                continue;
+            
+            int count = sphere->calculateRayIntersections(ray, sphereIntersections);
+            
+            if(count == 1) {
+                closestIntersection = std::min(closestIntersection, sphereIntersections[0]);
+            }
+            else if(count == 2) {
+                closestIntersection = std::min(closestIntersection, std::min(sphereIntersections[0], sphereIntersections[1]));
+            }
+        }
+        
+        return closestIntersection;
+    }
+    
+    Intersection<Shape> findClosestIntersectedShape(const Ray& ray, const Shape* lastReflection) {
+        return std::min(
+            findClosestIntersectedTriangle(ray, lastReflection).toGenericShapeIntersection(),
+            findClosestIntersectedSphere(ray, lastReflection).toGenericShapeIntersection()
+        );
+    }
+};
 
 struct Renderer {
     Color* frameBuffer;
@@ -90,12 +134,17 @@ struct Renderer {
     }
 };
 
+
+template<typename Tracer>
 struct RayTracer {
     std::vector<Shape* > shapesInScene;
     
     Scene scene;
     
     Renderer renderer;
+    Tracer tracer;
+    
+    RayTracer() : tracer(scene) { }
     
     Ray calculateRayForPixelOnScreen(int x, int y) {
         Vec3 pixelPos(x - renderer.screenW / 2, y - renderer.screenH / 2, renderer.distToScreen);
@@ -118,7 +167,7 @@ struct RayTracer {
         
         for(Light* light = scene.lights.begin(); light != scene.lights.end(); ++light) {
             Ray lightRay(pointOnObj, light->pos);
-            Intersection closestIntersection;
+            Intersection<Shape> closestIntersection;
             
             if(!findNearestRayIntersection(lightRay, shape, closestIntersection))
                 result = result + light->evaluatePhongReflectionModel(shape->material, shape->color, objNormal, pointOnObj, scene.camPosition);
@@ -127,31 +176,33 @@ struct RayTracer {
         return result.maxValue(1.0);
     }
     
-    bool findNearestRayIntersection(const Ray& ray, const Shape* lastReflection, Intersection& closestIntersection) {
-        Intersection intersections[10];
-        bool hitAtLeastOneObject = false;
-        float minDist = 100000000;
+    bool findNearestRayIntersection(const Ray& ray, const Shape* lastReflection, Intersection<Shape>& closestIntersection) {
+//         Intersection intersections[10];
+//         bool hitAtLeastOneObject = false;
+//         float minDist = 100000000;
+//         
+//         closestIntersection.shape = NULL;
+//         
+//         int count = 0;
+//         
+//         for(Triangle* shape = scene.triangles.begin(); shape != scene.triangles.end(); ++shape) {
+//             if(shape == lastReflection)
+//                 continue;
+//             
+//             int totalIntersections = shape->calculateRayIntersections(ray, intersections);
+//             count += totalIntersections;
+//             
+//             findClosestIntersection(ray.v[0], closestIntersection, intersections, totalIntersections, minDist);
+//         }
         
-        closestIntersection.shape = NULL;
-        
-        int count = 0;
-        
-        for(Triangle* shape = scene.triangles.begin(); shape != scene.triangles.end(); ++shape) {
-            if(shape == lastReflection)
-                continue;
-            
-            int totalIntersections = shape->calculateRayIntersections(ray, intersections);
-            count += totalIntersections;
-            
-            findClosestIntersection(ray.v[0], closestIntersection, intersections, totalIntersections, minDist);
-        }
+        closestIntersection = tracer.findClosestIntersectedShape(ray, lastReflection).toGenericShapeIntersection();
         
         return closestIntersection.shape != NULL;
     }
     
     Color traceRay(const Ray& ray, int depth, const Shape* lastReflection) {
         Color rayColor = Vec3(0, 0, 0);
-        Intersection closestIntersection;
+        Intersection<Shape> closestIntersection;
         
         
         bool hitAtLeastOneObject = findNearestRayIntersection(ray, lastReflection, closestIntersection);
@@ -178,7 +229,7 @@ struct RayTracer {
         return rayColor;
     }
     
-    void findClosestIntersection(Vec3 start, Intersection& closestIntersection, Intersection* intersections, int totalIntersections, float& minDist) {
+    void findClosestIntersection(Vec3 start, Intersection<Shape>& closestIntersection, Intersection<Shape>* intersections, int totalIntersections, float& minDist) {
         for(int i = 0; i < totalIntersections; ++i) {
             float dist = start.distanceBetween(intersections[i].pos);
             

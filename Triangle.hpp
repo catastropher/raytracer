@@ -24,7 +24,7 @@ struct Triangle : Shape {
         normals[2] = plane.normal;
     }
     
-    int calculateRayIntersections(const Ray& ray, Intersection* intersectDest) const {
+    int calculateRayIntersections(const Ray& ray, Intersection<Triangle>* intersectDest) const {
         Vec3 u = (p[1] - p[0]);
         Vec3 v = (p[2] - p[0]);
         
@@ -59,6 +59,7 @@ struct Triangle : Shape {
         
         intersectDest->normal = calculateNormal(s1, t1); //calculateNormalAtPoint(intersectDest->pos);
         intersectDest->shape = this;
+        intersectDest->distanceFromRayStartSquared = (intersectDest->pos - ray.v[0]).lengthSquared();
         
         return 1;
     }

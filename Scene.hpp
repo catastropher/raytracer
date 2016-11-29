@@ -79,7 +79,7 @@ struct SceneBuilder {
         }
         
         scene.spheres.list = new Sphere[spheres.size()];
-        scene.spheres.total = triangles.size();
+        scene.spheres.total = spheres.size();
         
         for(int i = 0; i < spheres.size(); ++i) {
             scene.spheres.list[i] = spheres[i];

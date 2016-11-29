@@ -20,8 +20,12 @@ struct Vec3 {
         return Vec3(x - v.x, y - v.y, z - v.z);
     }
     
+    CUDA_CALLABLE float lengthSquared() const {
+        return x * x + y * y + z * z;
+    }
+    
     CUDA_CALLABLE float length() const {
-        return sqrt(x * x + y * y + z * z);
+        return sqrt(lengthSquared());
     }
     
     CUDA_CALLABLE Vec3 normalize() const {

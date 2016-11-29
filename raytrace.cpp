@@ -123,7 +123,7 @@ int main(int argc, char* argv[]) {
         }
     }
     
-    RayTracer tracer;
+    RayTracer<CPURayTracer> tracer;
     tracer.renderer.initialize(60.0, w, h);
     
     SceneBuilder builder;
