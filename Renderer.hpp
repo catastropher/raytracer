@@ -25,7 +25,7 @@ static inline float degToRadians(float deg) {
 struct CPURayTracer {
     Scene& scene;
     
-    CPURayTracer(Scene& scene_) : scene(scene_) { }
+    CUDA_CALLABLE CPURayTracer(Scene& scene_) : scene(scene_) { }
     
     Intersection<Triangle> findClosestIntersectedTriangle(const Ray& ray, const Shape* lastReflection) {
         Intersection<Triangle> closestIntersection;
@@ -137,23 +137,21 @@ struct Renderer {
 
 
 template<typename Tracer>
-struct RayTracer {
-    std::vector<Shape* > shapesInScene;
-    
+struct RayTracer {    
     Scene scene;
     
     Renderer renderer;
     Tracer tracer;
     
-    RayTracer() : tracer(scene) { }
+    CUDA_CALLABLE RayTracer() : tracer(scene) { }
     
-    Ray calculateRayForPixelOnScreen(int x, int y) {
+    CUDA_CALLABLE Ray calculateRayForPixelOnScreen(int x, int y) {
         Vec3 pixelPos(x - renderer.screenW / 2, y - renderer.screenH / 2, renderer.distToScreen);
         
         return Ray(scene.camPosition, pixelPos + scene.camPosition);
     }
     
-    Color calculateOnlySpecularHightlights(const Shape* shape, Vec3& objNormal, Vec3& pointOnObj) {
+    CUDA_CALLABLE Color calculateOnlySpecularHightlights(const Shape* shape, Vec3& objNormal, Vec3& pointOnObj) {
         Color result = Vec3(0, 0, 0);
         
         for(Light* light = scene.lights.begin(); light != scene.lights.end(); ++light) {
@@ -163,7 +161,7 @@ struct RayTracer {
         return result;
     }
     
-    Color calculateLighting(const Shape* shape, Vec3& objNormal, Vec3& pointOnObj) {
+    CUDA_CALLABLE Color calculateLighting(const Shape* shape, Vec3& objNormal, Vec3& pointOnObj) {
         Color result = shape->color * scene.ambientLightIntensity;
         
         for(Light* light = scene.lights.begin(); light != scene.lights.end(); ++light) {
@@ -177,12 +175,12 @@ struct RayTracer {
         return result.maxValue(1.0);
     }
     
-    bool findNearestRayIntersection(const Ray& ray, const Shape* lastReflection, Intersection<Shape>& closestIntersection) {        
+    CUDA_CALLABLE bool findNearestRayIntersection(const Ray& ray, const Shape* lastReflection, Intersection<Shape>& closestIntersection) {        
         closestIntersection = tracer.findClosestIntersectedShape(ray, lastReflection).toGenericShapeIntersection();
         return closestIntersection.shape != NULL;
     }
     
-    Color traceRay(const Ray& ray, int recursionDepth, const Shape* lastReflection) {
+    CUDA_CALLABLE Color traceRay(const Ray& ray, int recursionDepth, const Shape* lastReflection) {
         Intersection<Shape> closestIntersection;
         bool hitAtLeastOneObject = findNearestRayIntersection(ray, lastReflection, closestIntersection);
         
@@ -195,7 +193,7 @@ struct RayTracer {
         return calculateLighting(closestIntersection.shape, closestIntersection.normal, closestIntersection.pos);
     }
     
-    Color calculateReflectedRayColor(const Ray& ray, Intersection<Shape>& closestIntersection, int recursionDepth) {
+    CUDA_CALLABLE Color calculateReflectedRayColor(const Ray& ray, Intersection<Shape>& closestIntersection, int recursionDepth) {
         if(recursionDepth > 5)
             return renderer.backgroundColor;
         

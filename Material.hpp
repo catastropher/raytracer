@@ -2,7 +2,7 @@
 
 #include "Vec3.hpp"
 
-using Color = Vec3;
+typedef Vec3 Color;
 
 struct Material {
     float diffuse;

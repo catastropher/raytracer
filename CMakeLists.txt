@@ -18,8 +18,6 @@ if(CUDA_FOUND)
     set(USE_CUDA true)
     add_definitions(-D__WITH_CUDA__)
     list(APPEND RAYTRACE_SOURCES Cuda.cu)
-else()
-    message(FATAL_ERROR "CUDA not found")
 endif()
 
 if(USE_CUDA)

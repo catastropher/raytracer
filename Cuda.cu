@@ -3,13 +3,14 @@
 
 #include "Cuda.hpp"
 #include "Vec3.hpp"
+#include "Renderer.hpp"
 
 using namespace std;
 
 __global__ void raytraceCudaKernel() {
     Vec3 v(1, 2, 3);
     
-    printf("%f\n", v.length());
+    RayTracer<CPURayTracer> raytracer;
 }
 
 

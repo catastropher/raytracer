@@ -75,7 +75,7 @@ struct ModelLoader {
     }
     
     void addTriangle(int v0, int v1, int v2) {
-        Material mat = Material(.9, 1.0, 50, true);
+        Material mat = Material(.9, 1.0, 50, false);
         
         Triangle triangle(vertices[v0], vertices[v1], vertices[v2]);
         triangle.color = Vec3(.5, .5, .5);
