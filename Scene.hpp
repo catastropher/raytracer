@@ -10,13 +10,13 @@
 template<typename T>
 struct GeometryList {
     T* list;
-    int total;
+    size_t total;
     
-    T* begin() const {
+    CUDA_CALLABLE T* begin() const {
         return list;
     }
     
-    T* end() const {
+    CUDA_CALLABLE T* end() const {
         return list + total;
     }
 };

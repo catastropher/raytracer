@@ -90,83 +90,88 @@ void buildTestScene(SceneBuilder& builder) {
     
     ModelLoader loader;
     
-    try {
-        vector<Triangle> triangles = loader.loadFile("../teapot.obj");
-        builder.addTriangles(triangles);
-    }
-    catch(string s) {
-        cerr << "Error: " << s << endl;
-        exit(-1);
-    }
+
+    vector<Triangle> triangles = loader.loadFile("../teapot.obj");
+    builder.addTriangles(triangles);
     
     builder.addLight(light);
     //renderer.addLight(light2);
 }
 
-int main(int argc, char* argv[]) {   
-    bool saveFrame = false;
-    bool loadFrame = false;
-    string frameFileName;
-    int w = 640;
-    int h = 480;    
-    
-    for(int i = 1; i < argc; ++i) {
-        if(strcmp(argv[i], "--save") == 0) {
-            saveFrame = true;
-            frameFileName = argv[++i];
+int main(int argc, char* argv[]) {
+    try {
+        bool saveFrame = false;
+        bool loadFrame = false;
+        string frameFileName;
+        int w = 640;
+        int h = 480;    
+        
+        for(int i = 1; i < argc; ++i) {
+            if(strcmp(argv[i], "--save") == 0) {
+                saveFrame = true;
+                frameFileName = argv[++i];
+            }
+            else if(strcmp(argv[i], "--load") == 0) {
+                loadFrame = true;
+                frameFileName = argv[++i];
+            }
+            else if(strcmp(argv[i], "-w") == 0) {
+                w = atoi(argv[++i]);
+            }
+            else if(strcmp(argv[i], "-h") == 0) {
+                h = atoi(argv[++i]);
+            }
         }
-        else if(strcmp(argv[i], "--load") == 0) {
-            loadFrame = true;
-            frameFileName = argv[++i];
+        
+        RayTracer<CPURayTracer> tracer;
+        tracer.renderer.initialize(60.0, w, h);
+        
+        SceneBuilder builder;
+        
+        builder.ambientLightIntensity = .1;
+        builder.camPosition = Vec3(0, -100, 100);
+        buildTestScene(builder);
+        
+        tracer.scene = builder.buildScene();
+        
+        
+    #ifdef __WITH_CUDA__
+        printf("Invoking CUDA kernel\n");
+        launchCudaKernel(60.0, w, h, tracer.scene, tracer.renderer);
+    #endif
+        
+    #ifdef __WITH_SDL__
+        cls(RGB_Black);
+    #endif
+        
+        if(loadFrame) {
+            tracer.renderer.loadFrameBuffer(frameFileName);
+            tracer.renderer.displayFrameBuffer();
         }
-        else if(strcmp(argv[i], "-w") == 0) {
-            w = atoi(argv[++i]);
+        else {
+    #ifndef __WITH_CUDA__
+            tracer.raytrace();
+    #endif
         }
-        else if(strcmp(argv[i], "-h") == 0) {
-            h = atoi(argv[++i]);
+        
+        if(saveFrame) {
+            tracer.renderer.saveFrameBuffer(frameFileName);
         }
+        
+    #ifdef __WITH_SDL__
+        while(!done()) {
+            //++sp->center.z;
+            redraw();
+        }
+    #endif
     }
-    
-    RayTracer<CPURayTracer> tracer;
-    tracer.renderer.initialize(60.0, w, h);
-    
-    SceneBuilder builder;
-    
-    builder.ambientLightIntensity = .1;
-    builder.camPosition = Vec3(0, -100, 100);
-    buildTestScene(builder);
-    
-    tracer.scene = builder.buildScene();
-    
-    
-#ifdef __WITH_CUDA__
-    printf("Invoking CUDA kernel\n");
-    launchCudaKernel(60.0, w, h, tracer.scene);
-    return 0;
-#endif
-    
-    
-#ifdef __WITH_SDL__
-    cls(RGB_Black);
-#endif
-    
-    if(loadFrame) {
-        tracer.renderer.loadFrameBuffer(frameFileName);
-        tracer.renderer.displayFrameBuffer();
+    catch(string s) {
+        cerr << "Error: " << s << endl;
+        exit(-1);
     }
-    else {
-        tracer.raytrace();
+    catch(const char* s) {
+        cerr << "Error: " << s << endl;
+        exit(-1);
     }
-    
-    if(saveFrame) {
-        tracer.renderer.saveFrameBuffer(frameFileName);
-    }
-    
-#ifdef __WITH_SDL__
-    while(!done()) {
-        //++sp->center.z;
-        redraw();
-    }
-#endif
 }
 

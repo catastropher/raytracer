@@ -22,27 +22,45 @@ static inline float degToRadians(float deg) {
     return deg * PI / 180.0;
 }
 
+template<typename T>
+CUDA_CALLABLE T minimum(const T& a, const T& b) {
+    return (a < b ? a : b);
+}
+
+// #ifdef __WITH_CUDA__
+// template <> CUDA_CALLABLE float minimum<float>(const float& a, const float& b) {
+//     return fminf(a, b);
+// }
+// #endif
+
+
 struct CPURayTracer {
     Scene* scene;
     
     CUDA_CALLABLE CPURayTracer(Scene* scene_) : scene(scene_) { }
     
-    Intersection<Triangle> findClosestIntersectedTriangle(const Ray& ray, const Shape* lastReflection) {
+    CUDA_CALLABLE Intersection<Triangle> findClosestIntersectedTriangle(const Ray& ray, const Shape* lastReflection) {
         Intersection<Triangle> closestIntersection;
         Intersection<Triangle> triIntersection;
         
         for(Triangle* tri = scene->triangles.begin(); tri != scene->triangles.end(); ++tri) {
-            if(tri != lastReflection && tri->calculateRayIntersections(ray, &triIntersection) != 0) {
-                closestIntersection = std::min(closestIntersection, triIntersection);
+            if(tri != lastReflection && tri->calculateRayIntersections(ray, &triIntersection) > 0) {
+                //if(triIntersection.distanceFromRayStartSquared < closestIntersection.distanceFromRayStartSquared)
+                //    closestIntersection = triIntersection;
+                
+                
+                closestIntersection = minimum(triIntersection, closestIntersection);
             }
         }
         
         return closestIntersection;
     }
     
-    Intersection<Sphere> findClosestIntersectedSphere(const Ray& ray, const Shape* lastReflection) {
+    CUDA_CALLABLE Intersection<Sphere> findClosestIntersectedSphere(const Ray& ray, const Shape* lastReflection) {
         Intersection<Sphere> closestIntersection;
         Intersection<Sphere> sphereIntersections[2];
+        
+        //printf("Total triangles: %d\n", (int)scene->triangles.total);
         
         for(Sphere* sphere = scene->spheres.begin(); sphere != scene->spheres.end(); ++sphere) {
             if(sphere == lastReflection)
@@ -51,18 +69,18 @@ struct CPURayTracer {
             int count = sphere->calculateRayIntersections(ray, sphereIntersections);
             
             if(count == 1) {
-                closestIntersection = std::min(closestIntersection, sphereIntersections[0]);
+                closestIntersection = minimum(closestIntersection, sphereIntersections[0]);
             }
             else if(count == 2) {
-                closestIntersection = std::min(closestIntersection, std::min(sphereIntersections[0], sphereIntersections[1]));
+                closestIntersection = minimum(closestIntersection, minimum(sphereIntersections[0], sphereIntersections[1]));
             }
         }
         
         return closestIntersection;
     }
     
-    Intersection<Shape> findClosestIntersectedShape(const Ray& ray, const Shape* lastReflection) {
-        return std::min(
+    CUDA_CALLABLE Intersection<Shape> findClosestIntersectedShape(const Ray& ray, const Shape* lastReflection) {
+        return minimum(
             findClosestIntersectedTriangle(ray, lastReflection).toGenericShapeIntersection(),
             findClosestIntersectedSphere(ray, lastReflection).toGenericShapeIntersection()
         );
@@ -200,7 +218,7 @@ struct RayTracer {
     }
     
     CUDA_CALLABLE Color calculateReflectedRayColor(const Ray& ray, Intersection<Shape>& closestIntersection, int recursionDepth) {
-        if(recursionDepth > 5)
+        if(recursionDepth > 1)
             return renderer.backgroundColor;
         
         Ray reflectedRay = ray.reflectAboutNormal(closestIntersection.normal, closestIntersection.pos);
@@ -214,13 +232,19 @@ struct RayTracer {
         return (reflectedRayColor * fresnelEffect + calculateOnlySpecularHightlights(closestIntersection.shape, closestIntersection.normal, closestIntersection.pos)).maxValue(1.0);
     }
     
-    void raytrace() {
+    CUDA_CALLABLE void raytraceSingleRay(int x, int y) {
+        Ray ray = calculateRayForPixelOnScreen(x, y);
+                
+        Color rayColor = traceRay(ray, 0, NULL) * 255;
+        renderer.frameBuffer[y * renderer.screenW + x] = rayColor;
+    }
+    
+    CUDA_CALLABLE void raytrace() {
         for(int i = 0; i < renderer.screenH; ++i) {
             for(int j = 0; j < renderer.screenW; ++j) {
-                Ray ray = calculateRayForPixelOnScreen(j, i);
+                raytraceSingleRay(j, i);
                 
-                Color rayColor = traceRay(ray, 0, NULL) * 255;
-                renderer.frameBuffer[i * renderer.screenW + j] = rayColor;
+                Color rayColor = renderer.frameBuffer[i * renderer.screenW + j];
                 
 #ifdef __WITH_SDL__
                 QuickCG::pset(j, i, QuickCG::ColorRGB(rayColor.x, rayColor.y, rayColor.z));
@@ -231,7 +255,7 @@ struct RayTracer {
             QuickCG::redraw();
             QuickCG::redraw();
 #endif
-            std::cout << (i * 100 / renderer.screenH) << "%" << std::endl;
+            //std::cout << (i * 100 / renderer.screenH) << "%" << std::endl;
         }
     }
 };

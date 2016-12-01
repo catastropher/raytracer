@@ -23,6 +23,8 @@ struct ModelLoader {
     std::vector<Vec3> normals;
     
     std::vector<Triangle> loadFile(std::string fileName) {
+        printf("Loading mode %s\n", fileName.c_str());
+        
         FILE* file = fopen(fileName.c_str(), "rb");
         if(!file)
             throw "Failed to load file: " + fileName;
@@ -38,6 +40,8 @@ struct ModelLoader {
         
         std::vector<Line> lines = parseFile(fileContents);
         processLines(lines);
+        
+        printf("Done loading file\n");
         
         return triangles;
     }
@@ -149,24 +153,24 @@ struct ModelLoader {
         
         while(start < fileEnd) {
             end = findLineEnd(start);
-            std::cout << "Line: " << std::string(start, end) << std::endl;
+            //std::cout << "Line: " << std::string(start, end) << std::endl;
             lines.push_back(parseLine(start, end));
             start = end + 1;
         }
         
-        for(Line line : lines) {
-            std::cout << line.type << std::endl;
-            
-            for(LineArgument arg : line.arguments) {
-                std::cout << "\t";
-                
-                for(int i = 0; i < arg.part.size(); ++i) {
-                    std::cout << arg.part[i] << " ";
-                }
-                
-                std::cout << std::endl;
-            }
-        }
+//         for(Line line : lines) {
+//             std::cout << line.type << std::endl;
+//             
+//             for(LineArgument arg : line.arguments) {
+//                 std::cout << "\t";
+//                 
+//                 for(int i = 0; i < arg.part.size(); ++i) {
+//                     std::cout << arg.part[i] << " ";
+//                 }
+//                 
+//                 std::cout << std::endl;
+//             }
+//         }
         
         return lines;
     }
