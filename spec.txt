@@ -1,0 +1,42 @@
+
+model teapot: ../objects/teapot.obj 
+model minicooper: ../objects/minicooper.obj
+model alfa: ../objects/alfa147.obj
+model pyramid: ../objects/pyramid.obj
+model cube: ../objects/cube.obj
+int x;
+int y;
+int z;
+int r;
+int g;
+int b;
+
+sphere: 
+  pos:{x,y,z}
+  color:{r,g,b}
+
+triangle:
+  pos:{x,y,z}
+  color:{r,g,b}
+
+teapot:
+  pos:{x,y,z}
+  color:{r,g,b}
+
+pyramid:
+  pos:{x,y,z}
+  color:{r,g,b}
+
+cube:
+  pos:{x,y,z}
+  color:{r,g,b}
+
+alfa:
+  pos:{x,y,z}
+  color:{r,g,b}
+
+minicooper:
+  pos:{x,y,z}
+  color:{r,g,b}
+
+
