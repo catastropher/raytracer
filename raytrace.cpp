@@ -108,14 +108,7 @@ int main(int argc, char* argv[]) {
     bool loadFrame = false;
     string frameFileName;
     int w = 640;
-    int h = 480;
-    
-#ifdef __WITH_CUDA__
-    printf("Invoking CUDA kernel\n");
-    launchCudaKernel();
-    return 0;
-#endif
-    
+    int h = 480;    
     
     for(int i = 1; i < argc; ++i) {
         if(strcmp(argv[i], "--save") == 0) {
@@ -144,6 +137,13 @@ int main(int argc, char* argv[]) {
     buildTestScene(builder);
     
     tracer.scene = builder.buildScene();
+    
+    
+#ifdef __WITH_CUDA__
+    printf("Invoking CUDA kernel\n");
+    launchCudaKernel(60.0, w, h, tracer.scene);
+    return 0;
+#endif
     
     
 #ifdef __WITH_SDL__

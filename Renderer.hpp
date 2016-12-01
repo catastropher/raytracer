@@ -23,15 +23,15 @@ static inline float degToRadians(float deg) {
 }
 
 struct CPURayTracer {
-    Scene& scene;
+    Scene* scene;
     
-    CUDA_CALLABLE CPURayTracer(Scene& scene_) : scene(scene_) { }
+    CUDA_CALLABLE CPURayTracer(Scene* scene_) : scene(scene_) { }
     
     Intersection<Triangle> findClosestIntersectedTriangle(const Ray& ray, const Shape* lastReflection) {
         Intersection<Triangle> closestIntersection;
         Intersection<Triangle> triIntersection;
         
-        for(Triangle* tri = scene.triangles.begin(); tri != scene.triangles.end(); ++tri) {
+        for(Triangle* tri = scene->triangles.begin(); tri != scene->triangles.end(); ++tri) {
             if(tri != lastReflection && tri->calculateRayIntersections(ray, &triIntersection) != 0) {
                 closestIntersection = std::min(closestIntersection, triIntersection);
             }
@@ -44,7 +44,7 @@ struct CPURayTracer {
         Intersection<Sphere> closestIntersection;
         Intersection<Sphere> sphereIntersections[2];
         
-        for(Sphere* sphere = scene.spheres.begin(); sphere != scene.spheres.end(); ++sphere) {
+        for(Sphere* sphere = scene->spheres.begin(); sphere != scene->spheres.end(); ++sphere) {
             if(sphere == lastReflection)
                 continue;
             
@@ -84,12 +84,18 @@ struct Renderer {
 #endif
         screenW = w;
         screenH = h;
+        
         frameBuffer = new Color[w * h];
+        
         viewAngle = angle;
         distToScreen = (w / 2 ) / tan(degToRadians(angle / 2));
         
-        std::cout << "Dist to screen: " << distToScreen << std::endl;
+        //std::cout << "Dist to screen: " << distToScreen << std::endl;
     }
+    
+#ifdef __WITH_CUDA__
+    void initializeCuda(float angle, int w, int h);
+#endif
     
     void saveFrameBuffer(std::string fileName) {
         FILE* file = fopen(fileName.c_str(), "wb");
@@ -143,7 +149,7 @@ struct RayTracer {
     Renderer renderer;
     Tracer tracer;
     
-    CUDA_CALLABLE RayTracer() : tracer(scene) { }
+    CUDA_CALLABLE RayTracer() : tracer(&scene) { }
     
     CUDA_CALLABLE Ray calculateRayForPixelOnScreen(int x, int y) {
         Vec3 pixelPos(x - renderer.screenW / 2, y - renderer.screenH / 2, renderer.distToScreen);
