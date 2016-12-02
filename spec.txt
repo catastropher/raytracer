@@ -4,6 +4,8 @@ model minicooper: ../objects/minicooper.obj
 model alfa: ../objects/alfa147.obj
 model pyramid: ../objects/pyramid.obj
 model cube: ../objects/cube.obj
+
+model pumpkin: ../objects/pumpkin_tall_10k.obj
 int x;
 int y;
 int z;
@@ -36,6 +38,10 @@ alfa:
   color:{r,g,b}
 
 minicooper:
+  pos:{x,y,z}
+  color:{r,g,b}
+
+pumpkin:
   pos:{x,y,z}
   color:{r,g,b}
 
