@@ -91,7 +91,7 @@ void buildTestScene(SceneBuilder& builder) {
     ModelLoader loader;
     
 
-    vector<Triangle> triangles = loader.loadFile("../teapot.obj");
+    vector<Triangle> triangles = loader.loadFile("../objects/teapot.obj");
     builder.addTriangles(triangles);
     
     builder.addLight(light);
