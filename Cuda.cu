@@ -8,8 +8,8 @@
 
 using namespace std;
 
-#define BLOCK_WIDTH 4
-#define BLOCK_HEIGHT 4
+#define BLOCK_WIDTH 1
+#define BLOCK_HEIGHT 1
 #define THREADS_IN_BLOCK BLOCK_WIDTH * BLOCK_HEIGHT
 
 struct GPURayTracer {
@@ -17,24 +17,59 @@ struct GPURayTracer {
     
     CUDA_CALLABLE GPURayTracer(Scene* scene_) : scene(scene_) { }
     
-    CUDA_CALLABLE Intersection<Triangle> findClosestIntersectedTriangle(const Ray& ray, const Shape* lastReflection) {
-        Intersection<Triangle> closestIntersection;
-        Intersection<Triangle> triIntersection;
+    CUDA_DEVICE Intersection<Triangle> findClosestIntersectedTriangle(const Ray& ray, const Shape* lastReflection) {
+        CudaTriangleIntersection closestIntersection;
+        CudaTriangleIntersection triIntersection;
         
-        for(Triangle* tri = scene->triangles.begin(); tri != scene->triangles.end(); ++tri) {
-            if(tri != lastReflection && tri->calculateRayIntersections(ray, &triIntersection) > 0) {
-                //if(triIntersection.distanceFromRayStartSquared < closestIntersection.distanceFromRayStartSquared)
-                //    closestIntersection = triIntersection;
+        const int id = threadIdx.y * BLOCK_WIDTH + threadIdx.x;
+        
+        const int triangleSize = cudaTriangleListSize;
+        
+        __shared__ float trianglesGeometry[triangleSize * THREADS_IN_BLOCK];
+        
+        const int totalTrianglesInScene = scene->cudaTriangles.triangleGeometry.total / triangleSize;
+        const int iterations = (totalTrianglesInScene + THREADS_IN_BLOCK / 2) / THREADS_IN_BLOCK;
+        
+        const int trianglesInGroup = THREADS_IN_BLOCK;
+        const int triangleGroupSize = triangleSize * trianglesInGroup;
+        
+        for(int i = 0; i < iterations; ++i) {
+            for(int j = 0; j < triangleSize; ++j) {
+                int trianglesGeometryPos    = id + j * trianglesInGroup;
+                int sceneGeometryPos        = i * triangleGroupSize + trianglesGeometryPos;
                 
+                trianglesGeometry[trianglesGeometryPos] = scene->cudaTriangles.triangleGeometry.list[sceneGeometryPos];
+            }
+            __syncthreads();
+            
+            for(int j = 0; j < trianglesInGroup; ++j) {
+                CudaTriangle* triangle = (CudaTriangle*)&trianglesGeometry[j * triangleSize];
                 
-                closestIntersection = minimum(triIntersection, closestIntersection);
+                if(triangle->calculateRayIntersections(ray, &triIntersection) > 0) {
+                    if(triIntersection.distanceFromRayStartSquared < closestIntersection.distanceFromRayStartSquared) {
+                        closestIntersection = triIntersection;
+                    }
+                }
             }
         }
+   
+        
+   
+   
+//         for(Triangle* tri = scene->triangles.begin(); tri != scene->triangles.end(); ++tri) {
+//             if(tri != lastReflection && tri->calculateRayIntersections(ray, &triIntersection) > 0) {
+//                 //if(triIntersection.distanceFromRayStartSquared < closestIntersection.distanceFromRayStartSquared)
+//                 //    closestIntersection = triIntersection;
+//                 
+//                 
+//                 closestIntersection = minimum(triIntersection, closestIntersection);
+//             }
+//         }
         
         return closestIntersection;
     }
     
-    CUDA_CALLABLE Intersection<Sphere> findClosestIntersectedSphere(const Ray& ray, const Shape* lastReflection) {
+    CUDA_DEVICE Intersection<Sphere> findClosestIntersectedSphere(const Ray& ray, const Shape* lastReflection) {
         Intersection<Sphere> closestIntersection;
         Intersection<Sphere> sphereIntersections[2];
         
@@ -57,7 +92,7 @@ struct GPURayTracer {
         return closestIntersection;
     }
     
-    CUDA_CALLABLE Intersection<Shape> findClosestIntersectedShape(const Ray& ray, const Shape* lastReflection) {
+    CUDA_DEVICE Intersection<Shape> findClosestIntersectedShape(const Ray& ray, const Shape* lastReflection) {
         return minimum(
             findClosestIntersectedTriangle(ray, lastReflection).toGenericShapeIntersection(),
             findClosestIntersectedSphere(ray, lastReflection).toGenericShapeIntersection()
@@ -126,13 +161,13 @@ GeometryList<T> copyGeometryListToGPU(GeometryList<T> hostList) {
 CUDATriangleList convertTriangleGeometryListToCUDATriangleList(GeometryList<Triangle>& triangles) {
     CUDATriangleList deviceList;
     
-    GeometryList<float> triangleGeometry(triangles.total * cudaTriangleListSize());
+    GeometryList<float> triangleGeometry(triangles.total * cudaTriangleListSize);
     GeometryList<Material> materials(triangles.total);
     GeometryList<Color> colors(triangles.total);
     
     for(int i = 0; i < triangles.total; ++i) {
         Triangle& tri = triangles.list[i];
-        float* triangleStart = triangleGeometry.list + i * cudaTriangleListSize();
+        float* triangleStart = triangleGeometry.list + i * cudaTriangleListSize;
         
         for(int j = 0; j < 3; ++j) {
             cudaTriangleListVX(triangleStart, j) = tri.p[i].x;

@@ -3,6 +3,67 @@
 #include "Plane.hpp"
 #include "Shape.hpp"
 
+struct CudaTriangle {
+    float data[0];
+    
+    CUDA_CALLABLE Vec3 getVertex(int vertex) const {
+        return Vec3(
+            data[vertex * 3 + 0],
+            data[vertex * 3 + 1],
+            data[vertex * 3 + 2]
+        );
+    }
+    
+    CUDA_CALLABLE Plane getPlane() const {
+        return Plane(data[9], data[10], data[11], data[12]);
+    }
+    
+    CUDA_CALLABLE int calculateRayIntersections(const Ray& ray, CudaTriangleIntersection* intersectDest) {        
+        Vec3 p[3] = {
+            getVertex(0),
+            getVertex(1),
+            getVertex(2)
+        };
+        
+        Vec3 u = (p[1] - p[0]);
+        Vec3 v = (p[2] - p[0]);
+        
+        Plane plane = getPlane();
+        
+        if(!plane.calculateRayIntersection(ray, intersectDest->pos))
+            return 0;
+        
+        if(ray.dir.neg().dot(plane.normal) < 0)
+            return 0;
+        
+        Vec3 w = (intersectDest->pos - p[0]);
+        
+        float uv = u.dot(v);
+        float uu = u.dot(u);
+        
+        float vv = v.dot(v);
+        
+        float wv = w.dot(v);
+        float wu = w.dot(u);
+        
+        float d = uv * uv - uu * vv;
+        
+        if(d == 0)
+            return 0;
+        
+        float s1 = (uv * wv - vv * wu) / d;
+        float t1 = (uv * wu - uu * wv) / d;
+        
+        if(s1 < 0 || s1 > 1.0 || t1 < 0 || (s1 + t1) > 1.0)
+            return 0;
+        
+        intersectDest->triangleStart = data;
+        intersectDest->distanceFromRayStartSquared = (intersectDest->pos - ray.v[0]).lengthSquared();
+        
+        return 1;
+    }
+};
+
 struct Triangle : Shape {
     Vec3 p[3];
     Plane plane;

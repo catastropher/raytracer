@@ -31,6 +31,20 @@ struct Intersection {
     }
 };
 
+struct CudaTriangleIntersection {
+    float* triangleStart;
+    float intersectionS;
+    float intersectionT;
+    float distanceFromRayStartSquared;
+    Vec3 pos;
+    
+    CUDA_CALLABLE CudaTriangleIntersection() : triangleStart(NULL), pos(0, 0, 0), distanceFromRayStartSquared(1000000000) { }
+    
+    CUDA_CALLABLE bool operator<(const CudaTriangleIntersection& inter) const {
+        return distanceFromRayStartSquared < inter.distanceFromRayStartSquared;
+    }
+};
+
 struct Shape {
     Color color;
     Material material;

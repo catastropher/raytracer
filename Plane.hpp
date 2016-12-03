@@ -27,6 +27,13 @@ struct Plane {
         d = -p.dot(normal);
     }
     
+    CUDA_CALLABLE Plane(float a, float b, float c, float d_) {
+        normal.x = a;
+        normal.y = b;
+        normal.z = c;
+        d = d_;
+    }
+    
     CUDA_CALLABLE Plane() { }
 };
 

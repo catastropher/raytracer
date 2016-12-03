@@ -72,9 +72,7 @@ static inline float& cudaTriangleListPlaneD(float* t) {
     return t[3 * 3 + 3];
 }
 
-static inline int cudaTriangleListSize() {
-    return 13;
-}
+const int cudaTriangleListSize = 13;
 
 struct Scene {    
     Vec3 camPosition;
@@ -83,9 +81,9 @@ struct Scene {
     GeometryList<Sphere> spheres;
     GeometryList<Light> lights;
     
-#ifdef __WITH_CUDA__
+//#ifdef __WITH_CUDA__
     CUDATriangleList cudaTriangles;
-#endif
+//#endif
     
     
     float ambientLightIntensity;
