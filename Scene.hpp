@@ -19,7 +19,62 @@ struct GeometryList {
     CUDA_CALLABLE T* end() const {
         return list + total;
     }
+    
+    CUDA_CALLABLE GeometryList() {
+        list = NULL;
+        total = 0;
+    }
+    
+    CUDA_CALLABLE GeometryList(size_t total_) : total(total_) {
+        list = (T *)malloc(sizeof(T) * total);
+    }
+    
+    void cleanup() {
+        free(list);
+        list = NULL;
+        total = 0;
+    }
 };
+
+
+
+struct CUDATriangleList {
+    GeometryList<float>     triangleGeometry;
+    GeometryList<Color>     triangleColors;
+    GeometryList<Material>  triangleMaterials;
+};
+
+static inline float& cudaTriangleListVX(float* t, int vertexId) {
+    return t[vertexId * 3 + 0];
+}
+
+static inline float& cudaTriangleListVY(float* t, int vertexId) {
+    return t[vertexId * 3 + 1];
+}
+
+static inline float& cudaTriangleListVZ(float* t, int vertexId) {
+    return t[vertexId * 3 + 2];
+}
+
+static inline float& cudaTriangleListPlaneA(float* t) {
+    return t[3 * 3 + 0];
+}
+
+static inline float& cudaTriangleListPlaneB(float* t) {
+    return t[3 * 3 + 1];
+}
+
+static inline float& cudaTriangleListPlaneC(float* t) {
+    return t[3 * 3 + 2];
+}
+
+static inline float& cudaTriangleListPlaneD(float* t) {
+    return t[3 * 3 + 3];
+}
+
+static inline int cudaTriangleListSize() {
+    return 13;
+}
 
 struct Scene {    
     Vec3 camPosition;
@@ -27,6 +82,11 @@ struct Scene {
     GeometryList<Triangle> triangles;
     GeometryList<Sphere> spheres;
     GeometryList<Light> lights;
+    
+#ifdef __WITH_CUDA__
+    CUDATriangleList cudaTriangles;
+#endif
+    
     
     float ambientLightIntensity;
 };

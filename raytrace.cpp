@@ -159,9 +159,10 @@ int main(int argc, char* argv[]) {
         }
         
     #ifdef __WITH_SDL__
+        redraw();
+        
         while(!done()) {
             //++sp->center.z;
-            redraw();
         }
     #endif
     }

@@ -33,7 +33,6 @@ CUDA_CALLABLE T minimum(const T& a, const T& b) {
 // }
 // #endif
 
-
 struct CPURayTracer {
     Scene* scene;
     

@@ -8,12 +8,66 @@
 
 using namespace std;
 
-typedef RayTracer<CPURayTracer> Tracer;
-
-std::vector<void*> cudaAllocatedMemory;
-
 #define BLOCK_WIDTH 4
 #define BLOCK_HEIGHT 4
+#define THREADS_IN_BLOCK BLOCK_WIDTH * BLOCK_HEIGHT
+
+struct GPURayTracer {
+    Scene* scene;
+    
+    CUDA_CALLABLE GPURayTracer(Scene* scene_) : scene(scene_) { }
+    
+    CUDA_CALLABLE Intersection<Triangle> findClosestIntersectedTriangle(const Ray& ray, const Shape* lastReflection) {
+        Intersection<Triangle> closestIntersection;
+        Intersection<Triangle> triIntersection;
+        
+        for(Triangle* tri = scene->triangles.begin(); tri != scene->triangles.end(); ++tri) {
+            if(tri != lastReflection && tri->calculateRayIntersections(ray, &triIntersection) > 0) {
+                //if(triIntersection.distanceFromRayStartSquared < closestIntersection.distanceFromRayStartSquared)
+                //    closestIntersection = triIntersection;
+                
+                
+                closestIntersection = minimum(triIntersection, closestIntersection);
+            }
+        }
+        
+        return closestIntersection;
+    }
+    
+    CUDA_CALLABLE Intersection<Sphere> findClosestIntersectedSphere(const Ray& ray, const Shape* lastReflection) {
+        Intersection<Sphere> closestIntersection;
+        Intersection<Sphere> sphereIntersections[2];
+        
+        //printf("Total triangles: %d\n", (int)scene->triangles.total);
+        
+        for(Sphere* sphere = scene->spheres.begin(); sphere != scene->spheres.end(); ++sphere) {
+            if(sphere == lastReflection)
+                continue;
+            
+            int count = sphere->calculateRayIntersections(ray, sphereIntersections);
+            
+            if(count == 1) {
+                closestIntersection = minimum(closestIntersection, sphereIntersections[0]);
+            }
+            else if(count == 2) {
+                closestIntersection = minimum(closestIntersection, minimum(sphereIntersections[0], sphereIntersections[1]));
+            }
+        }
+        
+        return closestIntersection;
+    }
+    
+    CUDA_CALLABLE Intersection<Shape> findClosestIntersectedShape(const Ray& ray, const Shape* lastReflection) {
+        return minimum(
+            findClosestIntersectedTriangle(ray, lastReflection).toGenericShapeIntersection(),
+            findClosestIntersectedSphere(ray, lastReflection).toGenericShapeIntersection()
+        );
+    }
+};
+
+typedef RayTracer<GPURayTracer> Tracer;
+
+std::vector<void*> cudaAllocatedMemory;
 
 void cudaMemoryCleanup() {
     for(int i = 0; i < cudaAllocatedMemory.size(); ++i) {
@@ -59,7 +113,7 @@ GeometryList<T> copyGeometryListToGPU(GeometryList<T> hostList) {
     
     size_t size = sizeof(T) * hostList.total;
     
-    printf("Transfered size: %d (%d)", (int)size, sizeof(T));
+    printf("Transfered size: %d (%d)\n", (int)size, (int)sizeof(T));
     
     attemptCudaMalloc(&deviceList.list, size);
     cudaMemcpy(deviceList.list, hostList.list, size, cudaMemcpyHostToDevice);
@@ -69,12 +123,51 @@ GeometryList<T> copyGeometryListToGPU(GeometryList<T> hostList) {
     return deviceList;
 }
 
+CUDATriangleList convertTriangleGeometryListToCUDATriangleList(GeometryList<Triangle>& triangles) {
+    CUDATriangleList deviceList;
+    
+    GeometryList<float> triangleGeometry(triangles.total * cudaTriangleListSize());
+    GeometryList<Material> materials(triangles.total);
+    GeometryList<Color> colors(triangles.total);
+    
+    for(int i = 0; i < triangles.total; ++i) {
+        Triangle& tri = triangles.list[i];
+        float* triangleStart = triangleGeometry.list + i * cudaTriangleListSize();
+        
+        for(int j = 0; j < 3; ++j) {
+            cudaTriangleListVX(triangleStart, j) = tri.p[i].x;
+            cudaTriangleListVY(triangleStart, j) = tri.p[i].y;
+            cudaTriangleListVZ(triangleStart, j) = tri.p[i].z;
+        }
+        
+        cudaTriangleListPlaneA(triangleStart) = tri.plane.normal.x;
+        cudaTriangleListPlaneB(triangleStart) = tri.plane.normal.y;
+        cudaTriangleListPlaneC(triangleStart) = tri.plane.normal.z;
+        cudaTriangleListPlaneD(triangleStart) = tri.plane.d;
+        
+        materials.list[i] = triangles.list[i].material;
+        colors.list[i] = triangles.list[i].color;
+    }
+    
+    deviceList.triangleGeometry = copyGeometryListToGPU(triangleGeometry);
+    deviceList.triangleMaterials = copyGeometryListToGPU(materials);
+    deviceList.triangleColors = copyGeometryListToGPU(colors);
+    
+    triangleGeometry.cleanup();
+    materials.cleanup();
+    colors.cleanup();
+    
+    return deviceList;
+}
+
 Scene createSceneOnDevice(Scene hostScene) {
     Scene deviceScene = hostScene;
     
-    deviceScene.triangles = copyGeometryListToGPU(hostScene.triangles);
+    deviceScene.triangles = GeometryList<Triangle>(); //copyGeometryListToGPU(hostScene.triangles);
     deviceScene.spheres = copyGeometryListToGPU(hostScene.spheres);
     deviceScene.lights = copyGeometryListToGPU(hostScene.lights);
+    
+    deviceScene.cudaTriangles = convertTriangleGeometryListToCUDATriangleList(hostScene.triangles);
     
     return deviceScene;
 }
@@ -112,8 +205,8 @@ void copyFrameBufferFromDeviceToHost(Color* deviceFrameBuffer, Renderer& hostRen
 }
 
 void launchCudaKernel(float angle, int w, int h, Scene scene, Renderer& hostRenderer) {
-    dim3 gridSize(w, h, 1);
-    dim3 blockSize(1, 1, 1);
+    dim3 gridSize(w / BLOCK_WIDTH, h / BLOCK_HEIGHT, 1);
+    dim3 blockSize(BLOCK_WIDTH, BLOCK_HEIGHT, 1);
     
     cudaDeviceReset();
     
