@@ -7,6 +7,7 @@
 #include "Vec3.hpp"
 #include "Material.hpp"
 #include "Triangle.hpp"
+#include "Mat4.hpp"
 
 struct ModelLoader {
     struct LineArgument {

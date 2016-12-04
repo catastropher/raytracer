@@ -18,16 +18,6 @@
   #include "quickcg.h"
 #endif
 
-static inline float degToRadians(float deg) {
-    const float PI = 3.1415926535897;
-    return deg * PI / 180.0;
-}
-
-template<typename T>
-CUDA_CALLABLE T minimum(const T& a, const T& b) {
-    return (a < b ? a : b);
-}
-
 // #ifdef __WITH_CUDA__
 // template <> CUDA_CALLABLE float minimum<float>(const float& a, const float& b) {
 //     return fminf(a, b);
@@ -304,6 +294,11 @@ struct RayTracer {
             }
            
 #ifdef __WITH_SDL__
+    
+            for(int j = 0; j < renderer.screenW; ++j) {
+                QuickCG::pset(j, i + 1, QuickCG::RGB_White);
+            }
+            
             QuickCG::redraw();
             QuickCG::redraw();
 #endif
