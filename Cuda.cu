@@ -8,16 +8,12 @@
 
 using namespace std;
 
-#define BLOCK_WIDTH 1
-#define BLOCK_HEIGHT 1
-#define THREADS_IN_BLOCK BLOCK_WIDTH * BLOCK_HEIGHT
-
 struct GPURayTracer {
     Scene* scene;
     
     CUDA_CALLABLE GPURayTracer(Scene* scene_) : scene(scene_) { }
     
-    CUDA_DEVICE Intersection<Triangle> findClosestIntersectedTriangle(const Ray& ray, const Shape* lastReflection) {
+    CUDA_DEVICE Intersection<CudaTriangleAttributes> findClosestIntersectedTriangle(const Ray& ray, const Shape* lastReflection) {
         CudaTriangleIntersection closestIntersection;
         CudaTriangleIntersection triIntersection;
         
@@ -28,29 +24,45 @@ struct GPURayTracer {
         __shared__ float trianglesGeometry[triangleSize * THREADS_IN_BLOCK];
         
         const int totalTrianglesInScene = scene->cudaTriangles.triangleGeometry.total / triangleSize;
-        const int iterations = (totalTrianglesInScene + THREADS_IN_BLOCK / 2) / THREADS_IN_BLOCK;
+        const int iterations = (totalTrianglesInScene  / THREADS_IN_BLOCK);
         
         const int trianglesInGroup = THREADS_IN_BLOCK;
         const int triangleGroupSize = triangleSize * trianglesInGroup;
+        
+        int closestId = -1;
         
         for(int i = 0; i < iterations; ++i) {
             for(int j = 0; j < triangleSize; ++j) {
                 int trianglesGeometryPos    = id + j * trianglesInGroup;
                 int sceneGeometryPos        = i * triangleGroupSize + trianglesGeometryPos;
                 
+                //if(id == 0 && blockIdx.x == 0 && blockIdx.y == 0)
+                //    printf("Loaded %d\n", trianglesGeometryPos);
+                
                 trianglesGeometry[trianglesGeometryPos] = scene->cudaTriangles.triangleGeometry.list[sceneGeometryPos];
+                
             }
             __syncthreads();
             
             for(int j = 0; j < trianglesInGroup; ++j) {
-                CudaTriangle* triangle = (CudaTriangle*)&trianglesGeometry[j * triangleSize];
+                CudaTriangle* triangle = (CudaTriangle*)(&trianglesGeometry[j * triangleSize]);
                 
                 if(triangle->calculateRayIntersections(ray, &triIntersection) > 0) {
+                    int triId = i * trianglesInGroup + j;
                     if(triIntersection.distanceFromRayStartSquared < closestIntersection.distanceFromRayStartSquared) {
+                        if(&scene->cudaTriangles.triangleAttributes.list[triId] == lastReflection) {
+                            continue;
+                        }
+                        
+                        
                         closestIntersection = triIntersection;
+                        closestId = triId;
+                        //printf("Intersection!\n");
                     }
                 }
             }
+            
+            __syncthreads();
         }
    
         
@@ -66,7 +78,14 @@ struct GPURayTracer {
 //             }
 //         }
         
-        return closestIntersection;
+        if(closestId == -1)
+            return Intersection<CudaTriangleAttributes>();
+        
+        CudaTriangleAttributes* att = scene->cudaTriangles.triangleAttributes.list + closestId;
+        Vec3 normal = att->calculateNormal(closestIntersection.intersectionS, closestIntersection.intersectionT);
+        Intersection<CudaTriangleAttributes> inter(att, closestIntersection.pos, normal, closestIntersection.distanceFromRayStartSquared);
+        
+        return inter;
     }
     
     CUDA_DEVICE Intersection<Sphere> findClosestIntersectedSphere(const Ray& ray, const Shape* lastReflection) {
@@ -139,7 +158,11 @@ __global__ void raytraceCudaKernel(Tracer* tracer) {
     //printf("Total triangles: %d\n", tracer->scene.triangles.total);
     
     //tracer->raytrace();
-    tracer->raytraceSingleRay(blockIdx.x, blockIdx.y);
+    
+    int x = blockIdx.x * BLOCK_WIDTH + threadIdx.x;
+    int y = blockIdx.y * BLOCK_HEIGHT + threadIdx.y;
+    
+    tracer->raytraceSingleRay(x, y);
 }
 
 template<typename T>
@@ -162,35 +185,31 @@ CUDATriangleList convertTriangleGeometryListToCUDATriangleList(GeometryList<Tria
     CUDATriangleList deviceList;
     
     GeometryList<float> triangleGeometry(triangles.total * cudaTriangleListSize);
-    GeometryList<Material> materials(triangles.total);
-    GeometryList<Color> colors(triangles.total);
+    GeometryList<CudaTriangleAttributes> attributes(triangles.total);
     
     for(int i = 0; i < triangles.total; ++i) {
         Triangle& tri = triangles.list[i];
         float* triangleStart = triangleGeometry.list + i * cudaTriangleListSize;
+        CudaTriangle* cudaTri = (CudaTriangle*)triangleStart;
         
         for(int j = 0; j < 3; ++j) {
-            cudaTriangleListVX(triangleStart, j) = tri.p[i].x;
-            cudaTriangleListVY(triangleStart, j) = tri.p[i].y;
-            cudaTriangleListVZ(triangleStart, j) = tri.p[i].z;
+            cudaTri->setVertex(j, tri.p[j]);
         }
+
+        cudaTri->setPlane(tri.plane);
         
-        cudaTriangleListPlaneA(triangleStart) = tri.plane.normal.x;
-        cudaTriangleListPlaneB(triangleStart) = tri.plane.normal.y;
-        cudaTriangleListPlaneC(triangleStart) = tri.plane.normal.z;
-        cudaTriangleListPlaneD(triangleStart) = tri.plane.d;
-        
-        materials.list[i] = triangles.list[i].material;
-        colors.list[i] = triangles.list[i].color;
+        attributes.list[i].color = triangles.list[i].color;
+        attributes.list[i].material = triangles.list[i].material;
+        attributes.list[i].normals[0] = triangles.list[i].normals[0];
+        attributes.list[i].normals[1] = triangles.list[i].normals[1];
+        attributes.list[i].normals[2] = triangles.list[i].normals[2];
     }
     
     deviceList.triangleGeometry = copyGeometryListToGPU(triangleGeometry);
-    deviceList.triangleMaterials = copyGeometryListToGPU(materials);
-    deviceList.triangleColors = copyGeometryListToGPU(colors);
+    deviceList.triangleAttributes = copyGeometryListToGPU(attributes);
     
     triangleGeometry.cleanup();
-    materials.cleanup();
-    colors.cleanup();
+    attributes.cleanup();
     
     return deviceList;
 }

@@ -3,6 +3,14 @@
 #include "Plane.hpp"
 #include "Shape.hpp"
 
+struct CudaTriangleAttributes : Shape {
+    Vec3 normals[3];
+    
+    CUDA_CALLABLE Vec3 calculateNormal(float u, float v) const {
+        return normals[0] * (1.0 - u - v) + normals[1] * u + normals[2] * v;
+    }
+};
+
 struct CudaTriangle {
     float data[0];
     
@@ -14,8 +22,21 @@ struct CudaTriangle {
         );
     }
     
+    CUDA_CALLABLE void setVertex(int vertex, Vec3 v) {
+        data[vertex * 3 + 0] = v.x;
+        data[vertex * 3 + 1] = v.y;
+        data[vertex * 3 + 2] = v.z;
+    }
+    
     CUDA_CALLABLE Plane getPlane() const {
         return Plane(data[9], data[10], data[11], data[12]);
+    }
+    
+    void setPlane(Plane p) {
+        data[9] = p.normal.x;
+        data[10] = p.normal.y;
+        data[11] = p.normal.z;
+        data[12] = p.d;
     }
     
     CUDA_CALLABLE int calculateRayIntersections(const Ray& ray, CudaTriangleIntersection* intersectDest) {        
@@ -59,6 +80,8 @@ struct CudaTriangle {
         
         intersectDest->triangleStart = data;
         intersectDest->distanceFromRayStartSquared = (intersectDest->pos - ray.v[0]).lengthSquared();
+        intersectDest->intersectionS = s1;
+        intersectDest->intersectionT = t1;
         
         return 1;
     }

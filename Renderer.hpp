@@ -12,6 +12,7 @@
 #include "Triangle.hpp"
 #include "Sphere.hpp"
 #include "Scene.hpp"
+#include "config.hpp"
 
 #ifdef __WITH_SDL__
   #include "quickcg.h"
@@ -177,21 +178,28 @@ struct RayTracer {
     CUDA_DEVICE Color calculateOnlySpecularHightlights(const Shape* shape, Vec3& objNormal, Vec3& pointOnObj) {
         Color result = Vec3(0, 0, 0);
         
-        for(Light* light = scene.lights.begin(); light != scene.lights.end(); ++light) {
-            result = result + light->calculateSpecular(shape->material, pointOnObj, scene.camPosition, objNormal);
+        if(shape != NULL) {
+            for(Light* light = scene.lights.begin(); light != scene.lights.end(); ++light) {
+                result = result + light->calculateSpecular(shape->material, pointOnObj, scene.camPosition, objNormal);
+            }
         }
         
         return result;
     }
     
     CUDA_DEVICE Color calculateLighting(const Shape* shape, Vec3& objNormal, Vec3& pointOnObj) {
+        Shape tempShape;
+        
+        if(shape == NULL)
+            shape = &tempShape;
+        
         Color result = shape->color * scene.ambientLightIntensity;
         
         for(Light* light = scene.lights.begin(); light != scene.lights.end(); ++light) {
             Ray lightRay(pointOnObj, light->pos);
             Intersection<Shape> closestIntersection;
             
-            if(!findNearestRayIntersection(lightRay, shape, closestIntersection))
+            //if(!findNearestRayIntersection(lightRay, shape, closestIntersection))
                 result = result + light->evaluatePhongReflectionModel(shape->material, shape->color, objNormal, pointOnObj, scene.camPosition);
         }
         
@@ -203,7 +211,49 @@ struct RayTracer {
         return closestIntersection.shape != NULL;
     }
     
+#if defined(__WITH_CUDA__) && __CUDACC__
     CUDA_DEVICE Color traceRay(const Ray& ray, int recursionDepth, const Shape* lastReflection) {
+        Intersection<Shape> closestIntersection;
+        bool hitAtLeastOneObject = findNearestRayIntersection(ray, lastReflection, closestIntersection);
+        
+        __shared__ bool needReflection[THREADS_IN_BLOCK];
+        
+        int id = threadIdx.y * BLOCK_WIDTH + threadIdx.x;
+        
+        needReflection[id] = closestIntersection.shape != NULL && closestIntersection.shape->material.reflective;
+        
+        __syncthreads();
+        
+        bool reflect = false;
+        
+        for(int i = 0; i < THREADS_IN_BLOCK; ++i)
+            reflect |= needReflection[i];
+        
+        __syncthreads();
+       
+        Color lighting = calculateLighting(closestIntersection.shape, closestIntersection.normal, closestIntersection.pos);
+        
+        if(reflect) {
+            Color reflectedRayColor = calculateReflectedRayColor(ray, closestIntersection, recursionDepth);
+            
+            if(closestIntersection.shape != NULL) {
+                 if(closestIntersection.shape->material.reflective)
+                     return reflectedRayColor;
+                 else
+                     return lighting;
+            }
+            else {
+                return renderer.backgroundColor;
+            }
+        }
+        
+        if(!hitAtLeastOneObject)
+            return renderer.backgroundColor;
+        
+        return lighting;
+    }
+#else
+    CUDA_DEVICE Color traceRay(const Ray& ray, int recursionDepth, const Shape* lastReflection) {        
         Intersection<Shape> closestIntersection;
         bool hitAtLeastOneObject = findNearestRayIntersection(ray, lastReflection, closestIntersection);
         
@@ -213,11 +263,14 @@ struct RayTracer {
         if(closestIntersection.shape->material.reflective)
             return calculateReflectedRayColor(ray, closestIntersection, recursionDepth);
         
-        return calculateLighting(closestIntersection.shape, closestIntersection.normal, closestIntersection.pos);
+        Color lighting = calculateLighting(closestIntersection.shape, closestIntersection.normal, closestIntersection.pos);
+        
+        return lighting;
     }
+#endif
     
     CUDA_DEVICE Color calculateReflectedRayColor(const Ray& ray, Intersection<Shape>& closestIntersection, int recursionDepth) {
-        if(recursionDepth > 1)
+        if(recursionDepth >= 1)
             return renderer.backgroundColor;
         
         Ray reflectedRay = ray.reflectAboutNormal(closestIntersection.normal, closestIntersection.pos);

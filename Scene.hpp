@@ -39,9 +39,8 @@ struct GeometryList {
 
 
 struct CUDATriangleList {
-    GeometryList<float>     triangleGeometry;
-    GeometryList<Color>     triangleColors;
-    GeometryList<Material>  triangleMaterials;
+    GeometryList<float>                     triangleGeometry;
+    GeometryList<CudaTriangleAttributes>    triangleAttributes;
 };
 
 static inline float& cudaTriangleListVX(float* t, int vertexId) {
@@ -128,6 +127,31 @@ struct SceneBuilder {
     
     Scene buildScene() {
         Scene scene;
+        
+//#ifdef __WITH_CUDA__
+#if 1
+        if((triangles.size() % THREADS_IN_BLOCK) != 0) {
+            int trianglesToAdd = THREADS_IN_BLOCK - (triangles.size() % THREADS_IN_BLOCK);
+            
+            printf("Need to add %d triangles\n", trianglesToAdd);
+            
+            for(int i = 0; i < trianglesToAdd; ++i) {
+                Vec3 farFarAway(0, 0, 100000000.0f);
+                Vec3 farFarAway2(1, 0, 100000000.0f);
+                Vec3 farFarAway3(0, 1, 100000000.0f);
+                
+                Triangle t(farFarAway, farFarAway2, farFarAway3);
+                t.material.reflective = false;
+                t.color = Vec3(0, 0, 0);
+                t.material.alpha = 0;
+                t.material.diffuse = 0;
+                t.material.specular = 0;
+                
+                addTriangle(t);
+            }
+        }
+#endif
+//#endif
         
         scene.triangles.list = new Triangle[triangles.size()];
         scene.triangles.total = triangles.size();
