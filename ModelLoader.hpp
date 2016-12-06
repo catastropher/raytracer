@@ -9,6 +9,51 @@
 #include "Triangle.hpp"
 #include "Mat4.hpp"
 
+struct Model {
+    std::vector<Triangle> triangles;
+    
+    Model() { }
+    Model(std::vector<Triangle>& triangles_) {
+        triangles = triangles_;
+    }
+    
+    Model copy() const {
+        return *this;
+    }
+    
+    Model& transform(Mat4 mat) {
+        for(int i = 0; i < triangles.size(); ++i) {
+            triangles[i].transform(mat);
+        }
+        
+        return *this;
+    }
+    
+    Model& color(Color color) {
+        for(int i = 0; i < triangles.size(); ++i) {
+            triangles[i].color = color;
+        }
+        
+        return *this;
+    }
+    
+    Model& material(Material mat) {
+        for(int i = 0; i < triangles.size(); ++i) {
+            triangles[i].material = mat;
+        }
+        
+        return *this;
+    }
+    
+    Model& flipUpsideDown() {
+        for(int i = 0; i < triangles.size(); ++i) {
+            triangles[i].flipUpsideDown();
+        }
+        
+        return *this;
+    }
+};
+
 struct ModelLoader {
     struct LineArgument {
         std::vector<std::string> part;
@@ -23,7 +68,17 @@ struct ModelLoader {
     std::vector<Triangle> triangles;
     std::vector<Vec3> normals;
     
-    std::vector<Triangle> loadFile(std::string fileName) {
+    Vec3 calculateModelCenter() const {
+        Vec3 center(0, 0, 0);
+        
+        for(Vec3 v : vertices) {
+            center = center + v;
+        }
+        
+        return center * (1.0 / vertices.size());
+    }
+    
+    Model loadFile(std::string fileName) {
         printf("Loading mode %s\n", fileName.c_str());
         
         FILE* file = fopen(fileName.c_str(), "rb");
@@ -44,7 +99,7 @@ struct ModelLoader {
         
         printf("Done loading file\n");
         
-        return triangles;
+        return Model(triangles).transform(Mat4::identity().translate(calculateModelCenter().neg()));
     }
     
     void processLines(std::vector<Line>& lines) {
@@ -70,8 +125,8 @@ struct ModelLoader {
         
         Vec3 v(
             atof(line.arguments[0].part[0].c_str()),
-            -atof(line.arguments[1].part[0].c_str()) - 50,
-            atof(line.arguments[2].part[0].c_str()) + 400
+            atof(line.arguments[1].part[0].c_str()),
+            atof(line.arguments[2].part[0].c_str())
         );
         
         vertices.push_back(v);
@@ -123,7 +178,7 @@ struct ModelLoader {
         
         Vec3 n(
             atof(line.arguments[0].part[0].c_str()),
-            -atof(line.arguments[1].part[0].c_str()),
+            atof(line.arguments[1].part[0].c_str()),
             atof(line.arguments[2].part[0].c_str())
         );
         

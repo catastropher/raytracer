@@ -8,8 +8,8 @@
     #define CUDA_DEVICE
 #endif
 
-#define BLOCK_WIDTH 16
-#define BLOCK_HEIGHT 16
+#define BLOCK_WIDTH 64
+#define BLOCK_HEIGHT 8
 #define THREADS_IN_BLOCK (BLOCK_WIDTH * BLOCK_HEIGHT)
 
 static inline float degToRadians(float deg) {

@@ -26,14 +26,16 @@
 
 struct CPURayTracer {
     Scene* scene;
+    unsigned long long int triangleIntersectionCount;
     
-    CUDA_CALLABLE CPURayTracer(Scene* scene_) : scene(scene_) { }
+    CUDA_CALLABLE CPURayTracer(Scene* scene_) : scene(scene_), triangleIntersectionCount(0) { }
     
     CUDA_CALLABLE Intersection<Triangle> findClosestIntersectedTriangle(const Ray& ray, const Shape* lastReflection) {
         Intersection<Triangle> closestIntersection;
         Intersection<Triangle> triIntersection;
         
         for(Triangle* tri = scene->triangles.begin(); tri != scene->triangles.end(); ++tri) {
+            ++triangleIntersectionCount;
             if(tri != lastReflection && tri->calculateRayIntersections(ray, &triIntersection) > 0) {
                 //if(triIntersection.distanceFromRayStartSquared < closestIntersection.distanceFromRayStartSquared)
                 //    closestIntersection = triIntersection;
@@ -260,7 +262,7 @@ struct RayTracer {
 #endif
     
     CUDA_DEVICE Color calculateReflectedRayColor(const Ray& ray, Intersection<Shape>& closestIntersection, int recursionDepth) {
-        if(recursionDepth >= 1)
+        if(recursionDepth >= 3)
             return renderer.backgroundColor;
         
         Ray reflectedRay = ray.reflectAboutNormal(closestIntersection.normal, closestIntersection.pos);

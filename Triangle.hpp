@@ -2,6 +2,7 @@
 
 #include "Plane.hpp"
 #include "Shape.hpp"
+#include "Mat4.hpp"
 
 struct CudaTriangleAttributes : Shape {
     Vec3 normals[3];
@@ -99,13 +100,34 @@ struct Triangle : Shape {
         p[1] = p1;
         p[2] = p2;
         
-        Vec3 u = (p[1] - p[0]).normalize();
-        Vec3 v = (p[2] - p[0]).normalize();
-        plane = Plane(p[0], u, v);
+        updatePlaneEquation();
         
         normals[0] = plane.normal;
         normals[1] = plane.normal;
         normals[2] = plane.normal;
+    }
+    
+    void updatePlaneEquation() {
+        Vec3 u = (p[1] - p[0]).normalize();
+        Vec3 v = (p[2] - p[0]).normalize();
+        
+        plane = Plane(p[0], u, v);
+    }
+    
+    void flipUpsideDown() {
+        for(int i = 0; i < 3; ++i) {
+            p[i].y = -p[i].y;
+            normals[i].y = -normals[i].y;
+        }
+    }
+    
+    void transform(Mat4 mat) {
+        for(int i = 0; i < 3; ++i) {
+            p[i] = mat.rotateVec3(p[i]);
+            normals[i] = mat.rotateVec3Normal(normals[i]);
+        }
+        
+        updatePlaneEquation();
     }
     
     CUDA_CALLABLE int calculateRayIntersections(const Ray& ray, Intersection<Triangle>* intersectDest) const {

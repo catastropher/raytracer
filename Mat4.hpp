@@ -34,15 +34,15 @@ struct Mat4 {
         return res;
     }
     
-    Mat4 rotateAroundZ(float angle) const {
+    Mat4 rotateAroundY(float angle) const {
         float sinAngle = sin(degToRadians(angle));
         float cosAngle = cos(degToRadians(angle));
         
         float mat[4][4] = {
-            { cosAngle, -sinAngle,  0, 0 },
-            { sinAngle, cosAngle,   0, 0 },
-            { 0,        0,          0, 0 },
-            { 0,        0,          0, 1 }
+            { cosAngle, 0,  -sinAngle,  0 },
+            { 0,        1,  0,          0 },
+            { sinAngle, 0,  cosAngle,   0 },
+            { 0,        0,  0,          1 }
         };
         
         return multiply(Mat4(mat));
@@ -53,7 +53,7 @@ struct Mat4 {
         float cosAngle = cos(degToRadians(angle));
         
         float mat[4][4] = {
-            { 1, 0,         0,          0 },
+            { 1, 0,        0,           0 },
             { 0, cosAngle, -sinAngle,   0 },
             { 0, sinAngle, cosAngle,    0 },
             { 0, 0,        0,           1 }
@@ -64,18 +64,17 @@ struct Mat4 {
     
     Mat4 translate(const Vec3 v) const {
         float mat[4][4] = {
-            { 0, 0, 0, v.x },
-            { 0, 0, 0, v.y },
-            { 0, 0, 0, v.z },
+            { 1, 0, 0, v.x },
+            { 0, 1, 0, v.y },
+            { 0, 0, 1, v.z },
             { 0, 0, 0, 1   }
         };
         
         return multiply(Mat4(mat));
     }
     
-    Vec3 rotateVec3(const Vec3 v) const {
+    Vec3 transformVec4(const float* vv) const {
         float rot[4];
-        float vv[4] = { v.x, v.y, v.z, 1 };
         
         for(int i = 0; i < 4; ++i) {
             rot[i] = 0;
@@ -87,7 +86,26 @@ struct Mat4 {
         
         float w = rot[3];
         
-        return Vec3(rot[0] / w, rot[1] / w, rot[2] / w);
+        if(w != 0)
+            return Vec3(rot[0] / w, rot[1] / w, rot[2] / w);
+        else
+            return Vec3(rot[0], rot[1], rot[2]);
+    }
+    
+    Vec3 rotateVec3(const Vec3 v) const {
+        float vv[4] = { v.x, v.y, v.z, 1 };
+        return transformVec4(vv);
+    }
+    
+    Vec3 rotateVec3Normal(const Vec3 v) const {
+        Mat4 mat = identity();
+        
+        for(int i = 0; i < 3; ++i)
+            for(int j = 0; j < 3; ++j)
+                mat.elements[i][j] = elements[j][i];
+        
+        float vv[4] = { v.x, v.y, v.z, 0 };
+        return transformVec4(vv);
     }
     
     static Mat4 identity() {

@@ -4,6 +4,7 @@
 #include <cmath>
 #include <assert.h>
 #include <cstring>
+#include <clocale>
 
 #ifdef __WITH_SDL__
   #include "quickcg.h"
@@ -44,17 +45,20 @@ void buildTestScene(SceneBuilder& builder) {
     sphere->color = Vec3(1, 0, 0);
     sphere->material = mat;
     
-    mat.reflective = false;
+    mat.reflective = true;
     
     Sphere* sphere2 = new Sphere();
         
+    
+    Material sphereMaterial = mat;
+    sphereMaterial.reflective = false;
     sphere2->radius = 20;
-    sphere2->center = Vec3(-25, -20, 400 - 75);
+    sphere2->center = Vec3(-100, -150, 400);
     sphere2->color = Vec3(1, 0, 0);
-    sphere2->material = mat;
+    sphere2->material = sphereMaterial;
     
     
-    float w = 400, h = 5000;
+    float w = 800, h = 5000;
     float y = 0;
     float d = -1000;
     
@@ -70,9 +74,23 @@ void buildTestScene(SceneBuilder& builder) {
     for(int i = 0; i < 4; ++i) {
         center = center +  v[i] * (1.0 / 4);
     }
-
     
-    builder.addQuad(v, mat, Vec3(0, 0, 1.0));
+    float d2 = 800;
+    float h2 = -1000;
+    float w2 = 2000;
+    Vec3 v2[4] = {
+        Vec3(-w2, y, d2),
+        Vec3(-w2, y + h2, d2),
+        Vec3(w2, y + h2, d2),
+        Vec3(w2, y, d2)
+    };
+
+    Material floor = mat;
+    floor.reflective = true;
+    floor.specular = 0;
+    builder.addQuad(v, floor, Vec3(0, 0, 1.0));
+
+    builder.addQuad(v2, floor, Vec3(0, 0, 1.0));
     
     
     builder.addSphere(*sphere);
@@ -88,11 +106,27 @@ void buildTestScene(SceneBuilder& builder) {
     light2.pos.x = -light2.pos.x;
     light2.lookAt(center);
     
-    ModelLoader loader;
+    ModelLoader pumpkinLoader;
+    ModelLoader carLoader;
     
-
-    vector<Triangle> triangles = loader.loadFile("../objects/pumpkin_tall_10k.obj");
-    builder.addTriangles(triangles);
+    Model pumpkin = pumpkinLoader.loadFile("../objects/pumpkin_tall_10k.obj");
+    pumpkin.color(Color(1.0, .54, 0)).transform(
+        Mat4::identity().translate(Vec3(-50, -50, 500)).rotateAroundX(90)
+    );
+    builder.addTriangles(pumpkin.triangles);
+    
+    Model car = carLoader.loadFile("../objects/alfa147.obj");
+    car.color(Color(0, 0, 1)).transform(
+        Mat4::identity().translate(Vec3(-200, -50, 600)).rotateAroundY(45).rotateAroundX(90)
+    );
+    builder.addTriangles(car.triangles);
+    
+    
+    ModelLoader teapotLoader;
+    
+    Model teapot = teapotLoader.loadFile("../objects/teapot.obj");
+    teapot.flipUpsideDown().transform(Mat4::identity().translate(Vec3(100, -50, 400)));
+    builder.addTriangles(teapot.triangles);
     
     builder.addLight(light);
     //renderer.addLight(light2);
@@ -105,6 +139,7 @@ int main(int argc, char* argv[]) {
         string frameFileName;
         int w = 640;
         int h = 480;    
+        bool wait = true;
         
         for(int i = 1; i < argc; ++i) {
             if(strcmp(argv[i], "--save") == 0) {
@@ -121,6 +156,9 @@ int main(int argc, char* argv[]) {
             else if(strcmp(argv[i], "-h") == 0) {
                 h = atoi(argv[++i]);
             }
+            else if(strcmp(argv[i], "--nowait") == 0) {
+                wait = false;
+            }
         }
         
         RayTracer<CPURayTracer> tracer;
@@ -133,7 +171,6 @@ int main(int argc, char* argv[]) {
         buildTestScene(builder);
         
         tracer.scene = builder.buildScene();
-        
         
     #ifdef __WITH_CUDA__
         printf("Invoking CUDA kernel\n");
@@ -161,8 +198,14 @@ int main(int argc, char* argv[]) {
     #ifdef __WITH_SDL__
         redraw();
         
-        while(!done()) {
-            //++sp->center.z;
+        setlocale(LC_NUMERIC, "");
+        printf("There are %'lld triangles in the scene\n", (unsigned long long)builder.triangles.size());
+        printf("Required %'lld triangle intersections to render\n", tracer.tracer.triangleIntersectionCount);
+        
+        if(wait) {
+            while(!done()) {
+                //++sp->center.z;
+            }
         }
     #endif
     }
